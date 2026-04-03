@@ -1,17 +1,11 @@
 "use client";
 
 import { FormSelect } from "@/components/ui/FormInput";
-import { Warehouse } from "@/lib/types";
 import type { ChartRangePreset } from "@/lib/metricsDateRange";
 import { cn } from "@/lib/utils";
 import { SlidersHorizontal } from "lucide-react";
 
 interface DashboardToolbarProps {
-  warehouseScope: "all" | string;
-  onWarehouseScopeChange: (value: "all" | string) => void;
-  warehouses: Warehouse[];
-  /** Si es false, no se muestra la opción "Todos los almacenes" (solo un almacén asignado). */
-  showAllWarehousesOption: boolean;
   rangePreset: ChartRangePreset;
   onRangePresetChange: (preset: ChartRangePreset) => void;
   customDateFrom: string;
@@ -41,10 +35,6 @@ const dateInputClass = cn(
 );
 
 export function DashboardToolbar({
-  warehouseScope,
-  onWarehouseScopeChange,
-  warehouses,
-  showAllWarehousesOption,
   rangePreset,
   onRangePresetChange,
   customDateFrom,
@@ -52,17 +42,6 @@ export function DashboardToolbar({
   onCustomDatesChange,
   disabled,
 }: DashboardToolbarProps) {
-  const singleOnly = warehouses.length <= 1;
-
-  const warehouseOptions = [
-    ...(showAllWarehousesOption && !singleOnly
-      ? [{ value: "__all__", label: "Todos los almacenes" }]
-      : []),
-    ...warehouses.map((w) => ({ value: w.id, label: w.name })),
-  ];
-
-  const selectValue = warehouseScope === "all" ? "__all__" : warehouseScope;
-
   const todayYmd = (() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -94,29 +73,6 @@ export function DashboardToolbar({
             className="hidden sm:block w-px h-8 self-center bg-border/80 shrink-0"
             aria-hidden="true"
           />
-
-          {singleOnly ? (
-            <div className="flex flex-col gap-0.5 sm:min-w-[160px]">
-              <span className={compactLabel}>Almacén</span>
-              <span className="flex h-8 items-center rounded-md border border-dashed border-border/80 bg-muted/30 px-2.5 text-xs font-medium text-foreground">
-                {warehouses[0]?.name ?? "Almacén"}
-              </span>
-            </div>
-          ) : (
-            <FormSelect
-              className={cn(compactField, "flex-1 sm:min-w-[200px] sm:max-w-[260px]")}
-              labelClassName={compactLabel}
-              triggerClassName={compactTrigger}
-              label="Almacén"
-              value={selectValue}
-              disabled={disabled}
-              onChange={(e) => {
-                const v = e.target.value;
-                onWarehouseScopeChange(v === "__all__" ? "all" : v);
-              }}
-              options={warehouseOptions}
-            />
-          )}
 
           <FormSelect
             className={cn(compactField, "flex-1 sm:min-w-[200px] sm:max-w-[280px]")}

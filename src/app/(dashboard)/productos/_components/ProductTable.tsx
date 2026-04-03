@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { DataTable } from "@/components/ui/DataTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, productTypeLabel } from "@/lib/utils";
+import { getPackagingOptions } from "@/lib/masterBox";
 import { Eye, Pencil, Trash2 } from "lucide-react";
 import type { Product } from "@/lib/types";
 
@@ -19,6 +19,7 @@ interface ProductTableProps {
     pageSize: number;
     totalItems: number;
     onPageChange: (page: number) => void;
+    onPageSizeChange?: (pageSize: number) => void;
   };
 }
 
@@ -26,10 +27,10 @@ export function ProductTable({ products, loading, isAdmin, onEdit, onDelete, ser
   const router = useRouter();
 
   const columns = [
-    { key: "sku", label: "SKU" },
+    { key: "sku", label: "FNSKU" },
     {
       key: "name",
-      label: "Nombre",
+      label: "SKU",
       render: (item: Product) => (
         <button
           className="text-left font-medium text-primary hover:underline cursor-pointer"
@@ -40,32 +41,26 @@ export function ProductTable({ products, loading, isAdmin, onEdit, onDelete, ser
       ),
     },
     {
-      key: "product_type",
-      label: "Tipo",
-      render: (item: Product) => (
-        <Badge
-          variant={item.product_type === "final" ? "secondary" : "default"}
-          className={
-            item.product_type === "final"
-              ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0"
-              : ""
-          }
-        >
-          {productTypeLabel(item.product_type)}
-        </Badge>
-      ),
-    },
-    { key: "category_name", label: "Categoria" },
-    { key: "supplier_name", label: "Proveedor" },
-    {
-      key: "purchase_price",
-      label: "Precio Compra",
-      render: (item: Product) => formatCurrency(item.purchase_price),
-    },
-    {
-      key: "sale_price",
-      label: "Precio Venta",
-      render: (item: Product) => formatCurrency(item.sale_price),
+      key: "packaging",
+      label: "Caja Master",
+      render: (item: Product) => {
+        const packagingOptions = getPackagingOptions(item);
+        if (packagingOptions.length === 0) {
+          return <span className="text-muted-foreground text-sm">Sin definir</span>;
+        }
+        return (
+          <div className="min-w-[170px]">
+            {packagingOptions.map((option) => (
+              <div key={option.key} className="mb-1 last:mb-0">
+                <p className="font-medium text-foreground">{option.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[option.unitsLabel, option.weightLabel].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        );
+      },
     },
     { key: "min_stock", label: "Stock Min." },
     {
@@ -112,5 +107,13 @@ export function ProductTable({ products, loading, isAdmin, onEdit, onDelete, ser
     },
   ];
 
-  return <DataTable columns={columns} data={products} loading={loading} serverPagination={serverPagination} />;
+  return (
+    <DataTable
+      columns={columns}
+      data={products}
+      loading={loading}
+      pageSizeOptions={[15, 25, 50, 100]}
+      serverPagination={serverPagination}
+    />
+  );
 }

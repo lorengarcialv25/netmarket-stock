@@ -30,17 +30,21 @@ const DAY_OPTIONS: { label: string; value: DayRange }[] = [
 interface StockChartProps {
   productId: string;
   unitOfMeasure: string;
+  /** Almacén del header; si es null (Todos), el backend agrega todos */
+  warehouseId?: string | null;
 }
 
-export function StockChart({ productId, unitOfMeasure }: StockChartProps) {
+export function StockChart({ productId, unitOfMeasure, warehouseId }: StockChartProps) {
   const [days, setDays] = useState<DayRange>(30);
   const [data, setData] = useState<{ day: string; stock: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
+    const params: Record<string, string | number> = { product_id: productId, days };
+    if (warehouseId) params.warehouse_id = warehouseId;
     const { data: res } = await dypai.api.get("get_product_stock_history", {
-      params: { product_id: productId, days },
+      params,
     });
     if (res && Array.isArray(res)) {
       setData(
@@ -51,7 +55,7 @@ export function StockChart({ productId, unitOfMeasure }: StockChartProps) {
       );
     }
     setLoading(false);
-  }, [productId, days]);
+  }, [productId, days, warehouseId]);
 
   useEffect(() => {
     fetchHistory();

@@ -2,7 +2,7 @@
 
 import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/badge";
-import { formatDateTime, formatNumber, movementTypeLabel, movementReasonLabel } from "@/lib/utils";
+import { formatCurrency, formatDateTime, formatNumber, movementTypeLabel, movementReasonLabel } from "@/lib/utils";
 import type { StockMovement } from "@/lib/types";
 
 interface ProductMovementsProps {
@@ -55,6 +55,17 @@ export function ProductMovements({ movements, loading, totalItems, page, pageSiz
       key: "reason",
       label: "Motivo",
       render: (row: StockMovement) => (row.reason ? movementReasonLabel(row.reason) : "-"),
+    },
+    {
+      key: "lot_number",
+      label: "Lote",
+      render: (row: StockMovement) => row.lot_allocations || row.lot_number || "-",
+    },
+    {
+      key: "unit_cost",
+      label: "Coste Ud.",
+      render: (row: StockMovement) =>
+        row.unit_cost != null ? formatCurrency(Number(row.unit_cost)) : "-",
     },
   ];
 

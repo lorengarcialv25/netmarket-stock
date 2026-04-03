@@ -6,8 +6,10 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { useAuth } from "@/hooks/useAuth";
 import { WarehouseProvider } from "@/hooks/useWarehouse";
+import { DypaiProvider } from "@dypai-ai/client-sdk/react";
+import { dypai } from "@/lib/dypai";
 import { Spinner } from "@/components/ui/Spinner";
-import { Eye } from "lucide-react";
+import { ChatBubble } from "@/components/shared/ChatBubble";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -32,6 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!user) return null;
 
   return (
+    <DypaiProvider client={dypai}>
     <WarehouseProvider>
       <div className="h-screen flex overflow-hidden bg-background">
         <Sidebar
@@ -45,17 +48,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             collapsed={collapsed}
             onToggleCollapse={() => setCollapsed(!collapsed)}
           />
-          {user.role === "viewer" && (
-            <div className="shrink-0 flex items-center gap-2 px-4 py-1.5 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-medium">
-              <Eye size={12} />
-              Modo solo lectura — contacta con un administrador para obtener permisos de edicion
-            </div>
-          )}
           <main className="flex-1 p-4 lg:p-6 overflow-y-auto bg-background">
             {children}
           </main>
         </div>
+        {(user.role === "admin" || user.role === "colaborador") && <ChatBubble />}
       </div>
     </WarehouseProvider>
+    </DypaiProvider>
   );
 }

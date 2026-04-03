@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounce } from "@/hooks/useDebounce";
+import { getBomUnitOptions } from "@/lib/unitConversion";
 import { sileo } from "sileo";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FormInput } from "@/components/ui/FormInput";
@@ -31,6 +32,10 @@ interface BomItem {
   product_id: string;
   raw_material_id: string;
   quantity: number;
+  quantity_display?: number;
+  quantity_unit?: string;
+  display_quantity?: number;
+  display_unit?: string;
   created_at: string;
   raw_material_name: string;
   raw_material_sku: string;
@@ -60,7 +65,7 @@ export default function EscandallosPage() {
 
   // Add item form
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ raw_material_id: "", quantity: "" });
+  const [addForm, setAddForm] = useState({ raw_material_id: "", quantity: "", quantity_unit: "" });
   const [addSubmitting, setAddSubmitting] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
 
@@ -115,7 +120,7 @@ export default function EscandallosPage() {
     setSelectedProduct(product);
     setBomLoading(true);
     setShowAddForm(false);
-    setAddForm({ raw_material_id: "", quantity: "" });
+    setAddForm({ raw_material_id: "", quantity: "", quantity_unit: "" });
     const { data } = await dypai.api.get("get_bill_of_materials", {
       params: { product_id: product.id },
     });
@@ -124,7 +129,7 @@ export default function EscandallosPage() {
   }
 
   async function handleAddBomItem() {
-    if (!selectedProduct || !addForm.raw_material_id || !addForm.quantity) return;
+    if (!selectedProduct || !addForm.raw_material_id || !addForm.quantity || !addForm.quantity_unit) return;
     setAddSubmitting(true);
 
     const qty = parseFloat(addForm.quantity);
@@ -138,6 +143,7 @@ export default function EscandallosPage() {
       product_id: selectedProduct.id,
       raw_material_id: addForm.raw_material_id,
       quantity: qty,
+      quantity_unit: addForm.quantity_unit,
     });
 
     setAddSubmitting(false);
@@ -149,7 +155,7 @@ export default function EscandallosPage() {
     }
 
     sileo.success({ title: "Componente añadido" });
-    setAddForm({ raw_material_id: "", quantity: "" });
+    setAddForm({ raw_material_id: "", quantity: "", quantity_unit: "" });
     setShowAddForm(false);
 
     const { data } = await dypai.api.get("get_bill_of_materials", {
@@ -158,8 +164,8 @@ export default function EscandallosPage() {
     setBomItems(data || []);
   }
 
-  async function handleUpdateBomItem(bomId: string, quantity: number) {
-    const { error } = await dypai.api.put("update_bom_item", { id: bomId, quantity });
+  async function handleUpdateBomItem(bomId: string, quantity: number, quantityUnit: string) {
+    const { error } = await dypai.api.put("update_bom_item", { id: bomId, quantity, quantity_unit: quantityUnit });
     if (error) { sileo.error({ title: "Error al actualizar componente" }); return; }
     sileo.success({ title: "Cantidad actualizada" });
 
@@ -286,7 +292,10 @@ export default function EscandallosPage() {
                 onUpdateItem={handleUpdateBomItem}
                 showAddForm={showAddForm}
                 setShowAddForm={setShowAddForm}
-                availableRawMaterials={availableRawMaterials}
+                availableRawMaterials={availableRawMaterials.map((rm) => ({
+                  ...rm,
+                  unit_of_measure: rm.unit_of_measure || getBomUnitOptions("unidades")[0].value,
+                }))}
                 addForm={addForm}
                 setAddForm={setAddForm}
                 addSubmitting={addSubmitting}

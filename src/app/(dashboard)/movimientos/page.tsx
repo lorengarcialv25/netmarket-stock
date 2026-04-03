@@ -4,16 +4,21 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { useDebounce } from "@/hooks/useDebounce";
 import { sileo } from "sileo";
 import { useRouter } from "next/navigation";
 import { ClipboardList, Download, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { MovementTable } from "./_components/MovementTable";
 import { MovementFilters } from "./_components/MovementFilters";
 import { MovementForm, type MovementFormState } from "./_components/MovementForm";
+import { MovementDetailModal } from "./_components/MovementDetailModal";
+import { MovementEntryEditModal } from "./_components/MovementEntryEditModal";
 import { exportToExcel } from "@/lib/exportExcel";
+import type { StockMovement } from "@/lib/types";
 import { formatDateTime, formatDateOnly, movementReasonLabel } from "@/lib/utils";
 
 interface Warehouse {
@@ -35,6 +40,7 @@ const INITIAL_FORM: MovementFormState = {
   product_id: "",
   quantity: "",
   reason: "",
+  unit_cost: "",
   lot_number: "",
   expiry_date: "",
   destination_warehouse_id: "",
@@ -44,8 +50,9 @@ const INITIAL_FORM: MovementFormState = {
 export default function MovimientosPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const selectedWarehouseId = useWarehouseId();
   const searchParams = useSearchParams();
-  const [movements, setMovements] = useState<any[]>([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -56,36 +63,42 @@ export default function MovimientosPage() {
 
   // Filters
   const [filterType, setFilterType] = useState("");
-  const [filterWarehouse, setFilterWarehouse] = useState("");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search);
 
   // Form state
   const [form, setForm] = useState<MovementFormState>({ ...INITIAL_FORM });
   const [exporting, setExporting] = useState(false);
+  const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
+  const [editingMovement, setEditingMovement] = useState<StockMovement | null>(null);
+  const [deletingMovement, setDeletingMovement] = useState<StockMovement | null>(null);
+  const [editingEntry, setEditingEntry] = useState(false);
+  const [deletingEntry, setDeletingEntry] = useState(false);
 
   const canCreate =
     user?.role === "admin" ||
     user?.role === "warehouse_manager" ||
     user?.role === "worker";
+  const canManageHistory =
+    user?.role === "admin" || user?.role === "warehouse_manager";
 
   const fetchMovements = useCallback(async (p: number) => {
     setLoading(true);
     const params: Record<string, unknown> = { page: p, page_size: PAGE_SIZE };
     if (debouncedSearch) params.search = debouncedSearch;
     if (filterType) params.movement_type = filterType;
-    if (filterWarehouse) params.warehouse_id = filterWarehouse;
+    if (selectedWarehouseId) params.warehouse_id = selectedWarehouseId;
 
     const { data } = await dypai.api.get("list_movements", { params });
     if (data && Array.isArray(data)) {
-      setMovements(data);
+      setMovements(data as StockMovement[]);
       setTotalItems(data.length > 0 ? Number(data[0].total_count) : 0);
     } else {
       setMovements([]);
       setTotalItems(0);
     }
     setLoading(false);
-  }, [debouncedSearch, filterType, filterWarehouse]);
+  }, [debouncedSearch, filterType, selectedWarehouseId]);
 
   const fetchCatalogs = useCallback(async () => {
     const [whRes, prodRes] = await Promise.all([
@@ -107,7 +120,7 @@ export default function MovimientosPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, filterType, filterWarehouse]);
+  }, [debouncedSearch, filterType, selectedWarehouseId]);
 
   // Auto-open create modal from quick actions (with optional type preset)
   useEffect(() => {
@@ -136,12 +149,16 @@ export default function MovimientosPage() {
   }, [canCreate]);
 
   function openWithType(type: "entry" | "exit" | "transfer") {
-    setForm({ ...INITIAL_FORM, movement_type: type });
+    setForm({
+      ...INITIAL_FORM,
+      movement_type: type,
+      warehouse_id: selectedWarehouseId ?? "",
+    });
     setShowModal(true);
   }
 
   function resetForm() {
-    setForm({ ...INITIAL_FORM });
+    setForm({ ...INITIAL_FORM, warehouse_id: selectedWarehouseId ?? "" });
   }
 
   async function handleSubmit() {
@@ -156,8 +173,11 @@ export default function MovimientosPage() {
       quantity: Number(form.quantity),
       reason: form.reason,
     };
-    if (form.lot_number) body.lot_number = form.lot_number;
-    if (form.expiry_date) body.expiry_date = form.expiry_date;
+    if (form.movement_type === "entry") {
+      body.unit_cost = Number(form.unit_cost);
+      if (form.lot_number) body.lot_number = form.lot_number;
+      if (form.expiry_date) body.expiry_date = form.expiry_date;
+    }
     if (form.movement_type === "transfer" && form.destination_warehouse_id) {
       body.destination_warehouse_id = form.destination_warehouse_id;
     }
@@ -192,19 +212,28 @@ export default function MovimientosPage() {
     setExporting(true);
     try {
       const { data, error } = await dypai.api.get("list_movements", {
-        params: { page_size: 10000 },
+        params: {
+          page_size: 10000,
+          warehouse_id: selectedWarehouseId ?? undefined,
+          movement_type: filterType || undefined,
+          search: debouncedSearch || undefined,
+        },
       });
       if (error || !data || !Array.isArray(data)) {
         sileo.error({ title: "Error al exportar movimientos" });
         return;
       }
+      const exportRows = data.map((item) => ({
+        ...item,
+        display_lot: item.lot_allocations || item.lot_number,
+      }));
       const typeLabels: Record<string, string> = {
         entry: "Entrada",
         exit: "Salida",
         transfer: "Transferencia",
         adjustment: "Ajuste",
       };
-      exportToExcel(data as Record<string, unknown>[], [
+      exportToExcel(exportRows as Record<string, unknown>[], [
         {
           key: "created_at",
           label: "Fecha y hora",
@@ -230,9 +259,19 @@ export default function MovimientosPage() {
           format: (v) => (v ? movementReasonLabel(String(v)) : "—"),
         },
         {
-          key: "lot_number",
+          key: "display_lot",
           label: "Lote",
           format: (v) => (v == null || String(v) === "" ? "—" : String(v)),
+        },
+        {
+          key: "unit_cost",
+          label: "Coste ud.",
+          format: (v) => (v == null || String(v) === "" ? "—" : Number(v)),
+        },
+        {
+          key: "total_cost",
+          label: "Coste total",
+          format: (v) => (v == null || String(v) === "" ? "—" : Number(v)),
         },
         {
           key: "expiry_date",
@@ -256,6 +295,80 @@ export default function MovimientosPage() {
       setExporting(false);
     }
   };
+
+  function canEditMovement(movement: StockMovement) {
+    return (
+      canManageHistory &&
+      movement.movement_type === "entry" &&
+      !movement.delivery_note_id
+    );
+  }
+
+  function canDeleteMovement(movement: StockMovement) {
+    return canManageHistory && !movement.delivery_note_id;
+  }
+
+  function getDeleteMessage(movement: StockMovement) {
+    if (movement.movement_type === "entry") {
+      return "Se revertirá la entrada y se recalculará el coste medio. Solo se podrá eliminar si el lote no ha sido consumido.";
+    }
+    if (movement.movement_type === "exit") {
+      return "Se revertirá la salida y se devolverán las cantidades a sus lotes FIFO originales.";
+    }
+    return "Se revertirá la transferencia entre almacenes y se restaurará la trazabilidad de los lotes en origen.";
+  }
+
+  async function handleEditEntry(values: {
+    quantity: string;
+    reason: string;
+    unit_cost: string;
+    lot_number: string;
+    expiry_date: string;
+    notes: string;
+  }) {
+    if (!editingMovement) return;
+
+    setEditingEntry(true);
+    const { error } = await dypai.api.put("update_stock_movement_entry", {
+      movement_id: editingMovement.id,
+      quantity: Number(values.quantity),
+      reason: values.reason,
+      unit_cost: Number(values.unit_cost),
+      lot_number: values.lot_number,
+      expiry_date: values.expiry_date || undefined,
+      notes: values.notes,
+    });
+    setEditingEntry(false);
+
+    if (error) {
+      sileo.error({ title: "No se pudo actualizar la entrada" });
+      return;
+    }
+
+    sileo.success({ title: "Entrada actualizada" });
+    setEditingMovement(null);
+    fetchMovements(page);
+  }
+
+  async function handleDeleteMovement() {
+    if (!deletingMovement) return;
+
+    setDeletingEntry(true);
+    const { error } = await dypai.api.delete("delete_stock_movement", {
+      params: { movement_id: deletingMovement.id },
+    });
+    setDeletingEntry(false);
+
+    if (error) {
+      sileo.error({ title: "No se pudo eliminar el movimiento" });
+      return;
+    }
+
+    sileo.success({ title: "Movimiento eliminado" });
+    setDeletingMovement(null);
+    setSelectedMovement(null);
+    fetchMovements(page);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -297,9 +410,6 @@ export default function MovimientosPage() {
       <MovementFilters
         filterType={filterType}
         setFilterType={setFilterType}
-        filterWarehouse={filterWarehouse}
-        setFilterWarehouse={setFilterWarehouse}
-        warehouses={warehouses}
         search={search}
         onSearchChange={setSearch}
       />
@@ -307,6 +417,11 @@ export default function MovimientosPage() {
       <MovementTable
         data={movements}
         loading={loading}
+        onView={setSelectedMovement}
+        onEdit={setEditingMovement}
+        onDelete={setDeletingMovement}
+        canEdit={canEditMovement}
+        canDelete={canDeleteMovement}
         serverPagination={{
           page,
           pageSize: PAGE_SIZE,
@@ -324,6 +439,44 @@ export default function MovimientosPage() {
         submitting={submitting}
         warehouses={warehouses}
         products={products}
+      />
+
+      <MovementDetailModal
+        open={!!selectedMovement}
+        movement={selectedMovement}
+        canEdit={selectedMovement ? canEditMovement(selectedMovement) : false}
+        canDelete={selectedMovement ? canDeleteMovement(selectedMovement) : false}
+        deleting={deletingEntry}
+        onClose={() => setSelectedMovement(null)}
+        onEdit={() => {
+          if (!selectedMovement) return;
+          setEditingMovement(selectedMovement);
+          setSelectedMovement(null);
+        }}
+        onDelete={() => {
+          if (!selectedMovement) return;
+          setDeletingMovement(selectedMovement);
+          setSelectedMovement(null);
+        }}
+      />
+
+      <MovementEntryEditModal
+        open={!!editingMovement}
+        movement={editingMovement}
+        submitting={editingEntry}
+        onClose={() => setEditingMovement(null)}
+        onSubmit={handleEditEntry}
+      />
+
+      <ConfirmDialog
+        open={!!deletingMovement}
+        onClose={() => setDeletingMovement(null)}
+        onConfirm={handleDeleteMovement}
+        title="Eliminar movimiento"
+        message={
+          deletingMovement ? getDeleteMessage(deletingMovement) : undefined
+        }
+        confirmLabel={deletingEntry ? "Eliminando..." : "Eliminar"}
       />
     </div>
   );

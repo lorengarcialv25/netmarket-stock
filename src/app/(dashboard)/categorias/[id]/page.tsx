@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { Spinner } from "@/components/ui/Spinner";
 import { CategoryHeader } from "./_components/CategoryHeader";
 import { CategoryStats } from "./_components/CategoryStats";
@@ -23,6 +24,7 @@ interface CategoryDetail {
 export default function CategoryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const warehouseId = useWarehouseId();
   const canManage = user?.role === "admin" || user?.role === "warehouse_manager";
 
   const [category, setCategory] = useState<CategoryDetail | null>(null);
@@ -35,9 +37,9 @@ export default function CategoryDetailPage() {
   useEffect(() => {
     async function fetchCategory() {
       setLoading(true);
-      const { data } = await dypai.api.get("get_category_detail", {
-        params: { category_id: id },
-      });
+      const params: Record<string, string> = { category_id: id };
+      if (warehouseId) params.warehouse_id = warehouseId;
+      const { data } = await dypai.api.get("get_category_detail", { params });
       if (data && Array.isArray(data) && data.length > 0) {
         const d = data[0];
         setCategory({
@@ -51,21 +53,21 @@ export default function CategoryDetailPage() {
       setLoading(false);
     }
     fetchCategory();
-  }, [id]);
+  }, [id, warehouseId]);
 
   useEffect(() => {
     async function fetchProducts() {
       setProductsLoading(true);
-      const { data } = await dypai.api.get("get_category_products", {
-        params: { category_id: id },
-      });
+      const params: Record<string, string> = { category_id: id };
+      if (warehouseId) params.warehouse_id = warehouseId;
+      const { data } = await dypai.api.get("get_category_products", { params });
       if (data && Array.isArray(data)) {
         setProducts(data.map((p) => ({ ...p, total_stock: Number(p.total_stock) })));
       }
       setProductsLoading(false);
     }
     fetchProducts();
-  }, [id]);
+  }, [id, warehouseId]);
 
   const handleEdit = () => {
     window.location.href = `/categorias?edit=${id}`;

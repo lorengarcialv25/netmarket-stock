@@ -18,6 +18,7 @@ export interface DraftLine {
   quantity: string;
   unit_price: string;
   unit_of_measure: string;
+  expiry_date?: string;
   matched: boolean;
 }
 
@@ -49,6 +50,8 @@ interface Props {
   products: ProductOption[];
   onScanClick?: () => void;
   scanDisabled?: boolean;
+  /** Si el almacén viene del selector global (un almacén concreto), no se puede cambiar aquí. */
+  lockWarehouse?: boolean;
 }
 
 // -- Component --
@@ -58,6 +61,7 @@ export function DeliveryNoteForm({
   lines, onLinesChange,
   suppliers, warehouses, products,
   onScanClick, scanDisabled,
+  lockWarehouse = false,
 }: Props) {
   const productOptions = products.map((p) => ({ value: p.id, label: `${p.sku} - ${p.name}` }));
 
@@ -121,6 +125,7 @@ export function DeliveryNoteForm({
               placeholder="Seleccionar..."
               searchPlaceholder="Buscar almacen..."
               options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+              disabled={lockWarehouse}
             />
           </div>
         </CardContent>
@@ -129,6 +134,9 @@ export function DeliveryNoteForm({
       {/* Lines */}
       <Card>
         <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
+            El precio unitario de cada línea se usará para calcular el coste medio y generar el lote automático al confirmar.
+          </p>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm font-semibold text-foreground">
               Lineas {lines.length > 0 && <span className="text-muted-foreground font-normal">({lines.length})</span>}
@@ -163,7 +171,7 @@ export function DeliveryNoteForm({
                     <th className="py-2 pr-2 w-[40%]">Producto</th>
                     <th className="py-2 pr-2">SKU</th>
                     <th className="py-2 pr-2 text-right w-24">Cantidad</th>
-                    <th className="py-2 pr-2 text-right w-28">Precio Ud.</th>
+                    <th className="py-2 pr-2 text-right w-28">Coste Ud.</th>
                     <th className="py-2 pr-2 text-right w-28">Total</th>
                     <th className="py-2 w-10" />
                   </tr>

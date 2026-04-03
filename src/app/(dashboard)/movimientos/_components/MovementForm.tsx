@@ -24,6 +24,7 @@ export interface MovementFormState {
   product_id: string;
   quantity: string;
   reason: string;
+  unit_cost: string;
   lot_number: string;
   expiry_date: string;
   destination_warehouse_id: string;
@@ -135,14 +136,30 @@ export function MovementForm({
           options={reasonOptions.map((r) => ({ value: r, label: movementReasonLabel(r) }))}
         />
 
-        <FormInput
-          label="Número de lote"
-          placeholder="Ej: LOT-2026-001"
-          value={form.lot_number}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, lot_number: e.target.value }))
-          }
-        />
+        {form.movement_type === "entry" && (
+          <FormInput
+            label="Precio unitario *"
+            type="number"
+            step="0.01"
+            min={0}
+            placeholder="0.00"
+            value={form.unit_cost}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, unit_cost: e.target.value }))
+            }
+          />
+        )}
+
+        {form.movement_type === "entry" && (
+          <FormInput
+            label="Número de lote"
+            placeholder="Automático si se deja vacío"
+            value={form.lot_number}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, lot_number: e.target.value }))
+            }
+          />
+        )}
 
         <FormInput
           label="Fecha de caducidad"
@@ -180,6 +197,12 @@ export function MovementForm({
           rows={3}
         />
 
+        {form.movement_type === "exit" && (
+          <p className="text-xs text-muted-foreground">
+            El lote no se selecciona manualmente: la salida se asignará automáticamente por FIFO.
+          </p>
+        )}
+
         <div className="flex justify-end gap-3 mt-2">
           <Button variant="secondary" onClick={onClose}>
             Cancelar
@@ -192,6 +215,7 @@ export function MovementForm({
               !form.product_id ||
               !form.quantity ||
               !form.reason ||
+              (form.movement_type === "entry" && !form.unit_cost) ||
               (form.movement_type === "transfer" &&
                 !form.destination_warehouse_id)
             }

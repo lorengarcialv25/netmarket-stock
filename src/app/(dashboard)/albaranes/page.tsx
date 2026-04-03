@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { sileo } from "sileo";
 import { FileText, Eye, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -32,6 +33,7 @@ const PAGE_SIZE = 15;
 export default function AlbaranesPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const warehouseId = useWarehouseId();
   const canCreate = user?.role === "admin" || user?.role === "warehouse_manager";
 
   const [notes, setNotes] = useState<DeliveryNote[]>([]);
@@ -42,8 +44,11 @@ export default function AlbaranesPage() {
 
   const fetchNotes = useCallback(async (p: number) => {
     setLoading(true);
+    const params: Record<string, unknown> = { page: p, page_size: PAGE_SIZE };
+    if (warehouseId) params.warehouse_id = warehouseId;
+
     const { data } = await dypai.api.get("list_delivery_notes", {
-      params: { page: p, page_size: PAGE_SIZE },
+      params,
     });
     if (data && Array.isArray(data)) {
       setNotes(data);
@@ -53,7 +58,11 @@ export default function AlbaranesPage() {
       setTotalItems(0);
     }
     setLoading(false);
-  }, []);
+  }, [warehouseId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [warehouseId]);
 
   useEffect(() => { fetchNotes(page); }, [page, fetchNotes]);
 

@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
 import { sileo } from "sileo";
-import { Users } from "lucide-react";
+import { Users, Info, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { User } from "@dypai-ai/client-sdk";
 import type { Warehouse } from "@/lib/types";
 
@@ -19,7 +20,7 @@ const emptyForm: UserFormData = {
   email: "",
   password: "",
   full_name: "",
-  role: "viewer",
+  role: "worker",
   warehouse_ids: [],
 };
 
@@ -85,7 +86,7 @@ export default function UsuariosPage() {
 
   const openEdit = async (user: User) => {
     setEditingUser(user);
-    const role = user.role || "viewer";
+    const role = user.role || "worker";
 
     // Load assigned warehouses for non-admin users
     let warehouseIds: string[] = [];
@@ -218,6 +219,8 @@ export default function UsuariosPage() {
         showAction={isAdmin}
       />
 
+      <RolesGuide />
+
       <FilterBar
         search={search}
         onSearchChange={setSearch}
@@ -251,6 +254,121 @@ export default function UsuariosPage() {
         title="Confirmar Eliminación"
         message="¿Está seguro de que desea eliminar este usuario? Esta acción no se puede deshacer."
       />
+    </div>
+  );
+}
+
+const roles = [
+  {
+    name: "Admin",
+    value: "admin",
+    color: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+    description: "Acceso total a la plataforma",
+    can: [
+      "Ver y editar todo: productos, proveedores, categorias, almacenes",
+      "Gestionar usuarios y asignar roles",
+      "Ver precios, costes y valor de inventario",
+      "Metricas, escandallos y capacidad de produccion",
+      "Toda la operativa: movimientos, tareas, incidencias, albaranes",
+    ],
+  },
+  {
+    name: "Colaborador",
+    value: "colaborador",
+    color: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+    description: "Ve todo como admin pero solo opera",
+    can: [
+      "Ver todo: productos, proveedores, metricas, escandallos",
+      "Operativa completa: movimientos, tareas, incidencias, albaranes",
+      "Ver precios y valor de inventario",
+    ],
+    cannot: [
+      "No puede editar catalogo (productos, proveedores)",
+      "No puede gestionar categorias, almacenes ni usuarios",
+    ],
+  },
+  {
+    name: "Gestor almacen",
+    value: "warehouse_manager",
+    color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+    description: "Gestiona stock de sus almacenes asignados",
+    can: [
+      "Operativa completa: movimientos, tareas, incidencias, albaranes",
+      "Ver productos, proveedores, escandallos, metricas",
+      "Ve tareas de sus almacenes + tareas sin asignar",
+      "Ver precios y valor de inventario",
+    ],
+    cannot: [
+      "No puede gestionar categorias, almacenes ni usuarios",
+    ],
+  },
+  {
+    name: "Trabajador",
+    value: "worker",
+    color: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    description: "Operativa basica del dia a dia",
+    can: [
+      "Registrar movimientos de stock (entradas, salidas, transferencias)",
+      "Subir albaranes de entrada",
+      "Gestionar incidencias",
+      "Ver y gestionar solo sus tareas asignadas",
+      "Ver inventario (sin precios ni costes)",
+    ],
+    cannot: [
+      "No ve precios, costes ni valor de inventario",
+      "No ve productos, proveedores, escandallos ni metricas",
+      "No ve categorias, almacenes ni usuarios",
+    ],
+  },
+];
+
+function RolesGuide() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-3 text-left cursor-pointer hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Info size={16} className="text-primary" />
+          <span className="text-sm font-medium text-foreground">Guia de roles y permisos</span>
+        </div>
+        <ChevronDown size={16} className={cn("text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 border-t border-border pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {roles.map((role) => (
+              <div key={role.value} className="rounded-lg border border-border p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold", role.color)}>
+                    {role.name}
+                  </span>
+                  <span className="text-[10px] font-mono text-muted-foreground">{role.value}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{role.description}</p>
+                <div className="space-y-1">
+                  {role.can.map((item, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-xs text-foreground">
+                      <span className="text-green-500 mt-0.5 shrink-0">&#10003;</span>
+                      {item}
+                    </div>
+                  ))}
+                  {role.cannot?.map((item, i) => (
+                    <div key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <span className="text-red-400 mt-0.5 shrink-0">&#10007;</span>
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

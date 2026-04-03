@@ -3,17 +3,9 @@
 import { FilterBar } from "@/components/shared/FilterBar";
 import { FormSelect } from "@/components/ui/FormInput";
 
-interface Warehouse {
-  id: string;
-  name: string;
-}
-
 interface MovementFiltersProps {
   filterType: string;
   setFilterType: (value: string) => void;
-  filterWarehouse: string;
-  setFilterWarehouse: (value: string) => void;
-  warehouses: Warehouse[];
   search: string;
   onSearchChange: (value: string) => void;
 }
@@ -21,9 +13,6 @@ interface MovementFiltersProps {
 export function MovementFilters({
   filterType,
   setFilterType,
-  filterWarehouse,
-  setFilterWarehouse,
-  warehouses,
   search,
   onSearchChange,
 }: MovementFiltersProps) {
@@ -44,18 +33,6 @@ export function MovementFilters({
             { value: "entry", label: "Entrada" },
             { value: "exit", label: "Salida" },
             { value: "transfer", label: "Transferencia" },
-          ]}
-        />
-      </div>
-      <div className="flex-[0_1_220px]">
-        <FormSelect
-          label="Almacén"
-          value={filterWarehouse}
-          onChange={(e) => setFilterWarehouse(e.target.value)}
-          placeholder="Todos los almacenes"
-          options={[
-            { value: "", label: "Todos los almacenes" },
-            ...warehouses.map((w) => ({ value: w.id, label: w.name })),
           ]}
         />
       </div>

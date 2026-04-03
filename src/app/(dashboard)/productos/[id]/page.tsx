@@ -4,18 +4,27 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { sileo } from "sileo";
 import { Spinner } from "@/components/ui/Spinner";
 import { ProductHeader } from "./_components/ProductHeader";
 import { ProductInfo } from "./_components/ProductInfo";
 import { ProductStockSection } from "./_components/ProductStockSection";
 import { StockChart } from "./_components/StockChart";
+import { ProductLots } from "./_components/ProductLots";
 import { ProductMovements } from "./_components/ProductMovements";
 import { ProductBom } from "./_components/ProductBom";
 import { ProductForm, type ProductFormData } from "../_components/ProductForm";
 import type { Product, WarehouseStock, StockMovement, BillOfMaterial } from "@/lib/types";
 
 const MOVEMENTS_PAGE_SIZE = 10;
+
+function parseLeadingNumber(value: string): number | null {
+  const match = value.match(/\d+(?:[.,]\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0].replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 interface CatalogOption {
   id: string;
@@ -25,6 +34,7 @@ interface CatalogOption {
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const warehouseId = useWarehouseId();
   const isAdmin = user?.role === "admin";
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -49,7 +59,9 @@ export default function ProductDetailPage() {
     sku: "", name: "", description: "", product_type: "final",
     category_id: "", supplier_id: "", unit_of_measure: "unidades",
     purchase_price: "", sale_price: "", min_stock: "",
-    weight: "", weight_unit: "gramo", units_per_box: "", kg_per_box: "",
+    weight_display: "", weight_unit: "gramo",
+    units_per_box_blister: "", kg_per_box_blister: "",
+    units_per_box_60cm: "", kg_per_box_60cm: "",
     image_url: "",
   });
 
@@ -73,23 +85,27 @@ export default function ProductDetailPage() {
   useEffect(() => {
     async function fetchStock() {
       setStockLoading(true);
-      const { data } = await dypai.api.get("get_product_stock", {
-        params: { product_id: id },
-      });
+      const params: Record<string, string> = { product_id: id };
+      if (warehouseId) params.warehouse_id = warehouseId;
+      const { data } = await dypai.api.get("get_product_stock", { params });
       if (data && Array.isArray(data)) {
         setStock(data);
       }
       setStockLoading(false);
     }
     fetchStock();
-  }, [id]);
+  }, [id, warehouseId]);
 
   // Fetch movements (paginated)
   const fetchMovements = useCallback(async (page: number) => {
     setMovementsLoading(true);
-    const { data } = await dypai.api.get("get_product_movements", {
-      params: { product_id: id, page, page_size: MOVEMENTS_PAGE_SIZE },
-    });
+    const params: Record<string, string | number> = {
+      product_id: id,
+      page,
+      page_size: MOVEMENTS_PAGE_SIZE,
+    };
+    if (warehouseId) params.warehouse_id = warehouseId;
+    const { data } = await dypai.api.get("get_product_movements", { params });
     if (data && Array.isArray(data)) {
       setMovements(data);
       setMovementsTotal(data.length > 0 ? Number(data[0].total_count) : 0);
@@ -98,7 +114,11 @@ export default function ProductDetailPage() {
       setMovementsTotal(0);
     }
     setMovementsLoading(false);
-  }, [id]);
+  }, [id, warehouseId]);
+
+  useEffect(() => {
+    setMovementsPage(1);
+  }, [warehouseId]);
 
   useEffect(() => {
     fetchMovements(movementsPage);
@@ -143,10 +163,12 @@ export default function ProductDetailPage() {
         purchase_price: String(product.purchase_price),
         sale_price: String(product.sale_price),
         min_stock: String(product.min_stock),
-        weight: product.weight != null ? String(product.weight) : "",
+        weight_display: product.weight_display || (product.weight != null ? String(product.weight) : ""),
         weight_unit: product.weight_unit || "gramo",
-        units_per_box: product.units_per_box != null ? String(product.units_per_box) : "",
-        kg_per_box: product.kg_per_box != null ? String(product.kg_per_box) : "",
+        units_per_box_blister: product.units_per_box_blister || (product.units_per_box != null ? String(product.units_per_box) : ""),
+        kg_per_box_blister: product.kg_per_box_blister != null ? String(product.kg_per_box_blister) : (product.kg_per_box != null ? String(product.kg_per_box) : ""),
+        units_per_box_60cm: product.units_per_box_60cm || "",
+        kg_per_box_60cm: product.kg_per_box_60cm != null ? String(product.kg_per_box_60cm) : "",
         image_url: product.image_url || "",
       });
     }
@@ -154,14 +176,23 @@ export default function ProductDetailPage() {
   };
 
   const handleEditSubmit = async () => {
+    const legacyWeight = parseLeadingNumber(editForm.weight_display);
+    const legacyUnitsPerBox = parseLeadingNumber(editForm.units_per_box_blister);
+    const blisterKg = parseFloat(editForm.kg_per_box_blister) || null;
+    const box60Kg = parseFloat(editForm.kg_per_box_60cm) || null;
     const body = {
       ...editForm,
       purchase_price: parseFloat(editForm.purchase_price) || 0,
       sale_price: parseFloat(editForm.sale_price) || 0,
       min_stock: parseInt(editForm.min_stock) || 0,
-      weight: parseFloat(editForm.weight) || null,
-      units_per_box: parseInt(editForm.units_per_box) || null,
-      kg_per_box: parseFloat(editForm.kg_per_box) || null,
+      weight: legacyWeight,
+      units_per_box: legacyUnitsPerBox,
+      kg_per_box: blisterKg,
+      kg_per_box_blister: blisterKg,
+      kg_per_box_60cm: box60Kg,
+      weight_display: editForm.weight_display.trim(),
+      units_per_box_blister: editForm.units_per_box_blister.trim(),
+      units_per_box_60cm: editForm.units_per_box_60cm.trim(),
     };
     const { error } = await dypai.api.put("update_product", { ...body, id });
     if (error) { sileo.error({ title: "Error al actualizar producto" }); return; }
@@ -193,10 +224,15 @@ export default function ProductDetailPage() {
       <ProductStockSection
         stock={stock}
         loading={stockLoading}
-        purchasePrice={product.purchase_price}
+        averageCost={product.average_cost ?? product.purchase_price}
         minStock={product.min_stock}
       />
-      <StockChart productId={id} unitOfMeasure={product.unit_of_measure} />
+      <StockChart
+        productId={id}
+        unitOfMeasure={product.unit_of_measure}
+        warehouseId={warehouseId}
+      />
+      <ProductLots productId={id} />
       <ProductMovements
         movements={movements}
         loading={movementsLoading}

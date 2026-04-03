@@ -1,5 +1,6 @@
 "use client";
 
+import { getPackagingOptions } from "@/lib/masterBox";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -17,6 +18,16 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function ProductInfo({ product }: ProductInfoProps) {
+  const packagingOptions = getPackagingOptions(product);
+  const blister = packagingOptions.find((option) => option.key === "blister");
+  const box60 = packagingOptions.find((option) => option.key === "60cm");
+  const weightValue =
+    product.weight_display && product.weight_display.trim() !== ""
+      ? `${product.weight_display} ${product.weight_unit}`.trim()
+      : product.weight != null
+        ? `${product.weight} ${product.weight_unit}`.trim()
+        : null;
+
   return (
     <div className="rounded-xl border border-border bg-card p-5 ring-1 ring-foreground/5">
       <h2 className="text-sm font-semibold text-foreground mb-4">Informacion General</h2>
@@ -24,11 +35,18 @@ export function ProductInfo({ product }: ProductInfoProps) {
         <Field label="Categoria" value={product.category_name} />
         <Field label="Proveedor" value={product.supplier_name} />
         <Field label="Precio Compra" value={formatCurrency(product.purchase_price)} />
+        <Field label="Coste Medio" value={formatCurrency(product.average_cost ?? product.purchase_price)} />
         <Field label="Precio Venta" value={formatCurrency(product.sale_price)} />
         <Field label="Unidad de Medida" value={product.unit_of_measure} />
-        <Field label="Peso" value={product.weight != null ? `${product.weight} ${product.weight_unit}` : null} />
-        <Field label="Unidades / Caja" value={product.units_per_box != null ? String(product.units_per_box) : null} />
-        <Field label="Kg / Caja" value={product.kg_per_box != null ? String(product.kg_per_box) : null} />
+        <Field label="Peso" value={weightValue} />
+        <Field
+          label="Caja Blister"
+          value={blister ? [blister.unitsLabel, blister.weightLabel].filter(Boolean).join(" · ") : null}
+        />
+        <Field
+          label="Caja 60cm"
+          value={box60 ? [box60.unitsLabel, box60.weightLabel].filter(Boolean).join(" · ") : null}
+        />
         <Field label="Stock Minimo" value={String(product.min_stock)} />
         {product.description && (
           <div className="col-span-full">

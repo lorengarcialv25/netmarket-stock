@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import { getBomUnitOptions } from "@/lib/unitConversion";
 import { Plus, Trash2, Pencil, Check, X, Package, Euro, TrendingUp, Percent, Download } from "lucide-react";
 import { BomForm } from "./BomForm";
 
@@ -24,6 +25,10 @@ interface BomItem {
   product_id: string;
   raw_material_id: string;
   quantity: number;
+  quantity_display?: number;
+  quantity_unit?: string;
+  display_quantity?: number;
+  display_unit?: string;
   created_at: string;
   raw_material_name: string;
   raw_material_sku: string;
@@ -35,6 +40,7 @@ interface RawMaterial {
   id: string;
   name: string;
   sku: string;
+  unit_of_measure: string;
 }
 
 interface BomDetailProps {
@@ -46,12 +52,12 @@ interface BomDetailProps {
   onExportExcel?: () => void;
   onAddItem: () => void;
   onDeleteItem: (bomId: string) => void;
-  onUpdateItem: (bomId: string, quantity: number) => void;
+  onUpdateItem: (bomId: string, quantity: number, quantityUnit: string) => void;
   showAddForm: boolean;
   setShowAddForm: (show: boolean) => void;
   availableRawMaterials: RawMaterial[];
-  addForm: { raw_material_id: string; quantity: string };
-  setAddForm: (form: { raw_material_id: string; quantity: string }) => void;
+  addForm: { raw_material_id: string; quantity: string; quantity_unit: string };
+  setAddForm: (form: { raw_material_id: string; quantity: string; quantity_unit: string }) => void;
   addSubmitting: boolean;
 }
 
@@ -74,6 +80,7 @@ export function BomDetail({
   const [confirmDeleteBomId, setConfirmDeleteBomId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editQuantity, setEditQuantity] = useState("");
+  const [editQuantityUnit, setEditQuantityUnit] = useState("");
 
   const totalCost = useMemo(() => {
     return bomItems.reduce((sum, item) => sum + item.quantity * item.raw_material_price, 0);
@@ -89,29 +96,50 @@ export function BomDetail({
     {
       key: "quantity",
       label: "Cantidad",
-      render: (item: BomItem) =>
-        editingId === item.id ? (
-          <input
-            type="number"
-            min={0.01}
-            step={0.01}
-            value={editQuantity}
-            onChange={(e) => setEditQuantity(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const qty = parseFloat(editQuantity);
-                if (!isNaN(qty) && qty > 0) { onUpdateItem(item.id, qty); setEditingId(null); }
-              }
-              if (e.key === "Escape") setEditingId(null);
-            }}
-            autoFocus
-            className="w-20 h-7 rounded border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
-          />
+      render: (item: BomItem) => {
+        const displayQuantity = item.display_quantity ?? item.quantity_display ?? item.quantity;
+        const displayUnit = item.display_unit ?? item.quantity_unit ?? item.raw_material_unit;
+        const editOptions = getBomUnitOptions(item.raw_material_unit).map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ));
+
+        return editingId === item.id ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0.01}
+              step={0.01}
+              value={editQuantity}
+              onChange={(e) => setEditQuantity(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const qty = parseFloat(editQuantity);
+                  if (!isNaN(qty) && qty > 0 && editQuantityUnit) {
+                    onUpdateItem(item.id, qty, editQuantityUnit);
+                    setEditingId(null);
+                  }
+                }
+                if (e.key === "Escape") setEditingId(null);
+              }}
+              autoFocus
+              className="w-20 h-7 rounded border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
+            />
+            <select
+              value={editQuantityUnit}
+              onChange={(e) => setEditQuantityUnit(e.target.value)}
+              className="h-7 rounded border border-input bg-transparent px-2 text-sm outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
+            >
+              {editOptions}
+            </select>
+          </div>
         ) : (
           <span className="font-semibold">
-            {formatNumber(item.quantity)} {item.raw_material_unit}
+            {formatNumber(displayQuantity)} {displayUnit}
           </span>
-        ),
+        );
+      },
     },
     {
       key: "raw_material_price",
@@ -155,7 +183,10 @@ export function BomDetail({
                     size="sm"
                     onClick={() => {
                       const qty = parseFloat(editQuantity);
-                      if (!isNaN(qty) && qty > 0) { onUpdateItem(item.id, qty); setEditingId(null); }
+                      if (!isNaN(qty) && qty > 0 && editQuantityUnit) {
+                        onUpdateItem(item.id, qty, editQuantityUnit);
+                        setEditingId(null);
+                      }
                     }}
                     className="text-emerald-600"
                   >
@@ -176,7 +207,8 @@ export function BomDetail({
                     size="sm"
                     onClick={() => {
                       setEditingId(item.id);
-                      setEditQuantity(String(item.quantity));
+                      setEditQuantity(String(item.display_quantity ?? item.quantity_display ?? item.quantity));
+                      setEditQuantityUnit(item.display_unit ?? item.quantity_unit ?? item.raw_material_unit);
                     }}
                   >
                     <Pencil size={14} />
@@ -271,7 +303,7 @@ export function BomDetail({
           open={showAddForm}
           onClose={() => {
             setShowAddForm(false);
-            setAddForm({ raw_material_id: "", quantity: "" });
+            setAddForm({ raw_material_id: "", quantity: "", quantity_unit: "" });
           }}
           availableRawMaterials={availableRawMaterials}
           form={addForm}

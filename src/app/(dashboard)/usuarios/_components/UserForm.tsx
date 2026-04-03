@@ -33,9 +33,9 @@ interface UserFormProps {
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
-  { value: "warehouse_manager", label: "Gestor Almacén" },
-  { value: "worker", label: "Operario" },
-  { value: "viewer", label: "Visualizador" },
+  { value: "colaborador", label: "Colaborador" },
+  { value: "warehouse_manager", label: "Gestor Almacen" },
+  { value: "worker", label: "Trabajador" },
 ];
 
 export function UserForm({ open, onClose, editingUser, form, setForm, onSubmit, submitting, warehouses }: UserFormProps) {

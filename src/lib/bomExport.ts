@@ -18,6 +18,10 @@ interface BomLine {
   raw_material_sku?: string;
   raw_material_name?: string;
   quantity: number;
+  quantity_display?: number;
+  quantity_unit?: string;
+  display_quantity?: number;
+  display_unit?: string;
   raw_material_unit?: string;
   raw_material_price?: number;
 }
@@ -95,8 +99,8 @@ export async function exportEscandallosWorkbook(apiGet: ApiGet): Promise<
         pvp: Math.round(sale * 100) / 100,
         sku_materia_prima: line.raw_material_sku ?? "",
         materia_prima: line.raw_material_name ?? "",
-        cantidad: num(line.quantity),
-        unidad_materia_prima: line.raw_material_unit ?? "",
+        cantidad: num(line.display_quantity ?? line.quantity_display ?? line.quantity),
+        unidad_materia_prima: line.display_unit ?? line.quantity_unit ?? line.raw_material_unit ?? "",
         precio_unitario: Math.round(num(line.raw_material_price) * 100) / 100,
         subtotal_linea: Math.round(subtotal * 100) / 100,
         pct_sobre_coste_total: Math.round(pctCost * 100) / 100,
@@ -175,8 +179,8 @@ export function exportSingleBomWorkbook(
       pvp: Math.round(sale * 100) / 100,
       sku_materia_prima: line.raw_material_sku ?? "",
       materia_prima: line.raw_material_name ?? "",
-      cantidad: num(line.quantity),
-      unidad_materia_prima: line.raw_material_unit ?? "",
+      cantidad: num(line.display_quantity ?? line.quantity_display ?? line.quantity),
+      unidad_materia_prima: line.display_unit ?? line.quantity_unit ?? line.raw_material_unit ?? "",
       precio_unitario: Math.round(num(line.raw_material_price) * 100) / 100,
       subtotal_linea: Math.round(subtotal * 100) / 100,
       pct_sobre_coste_total: Math.round(pctCost * 100) / 100,

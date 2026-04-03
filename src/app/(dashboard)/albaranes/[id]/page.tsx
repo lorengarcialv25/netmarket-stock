@@ -181,6 +181,7 @@ export default function DeliveryNoteDetailPage() {
             quantity: String(l.quantity || ""),
             unit_price: l.unit_price != null ? String(l.unit_price) : (prod?.purchase_price ? String(prod.purchase_price) : ""),
             unit_of_measure: prod?.unit_of_measure || "",
+            expiry_date: l.expiry_date || "",
             matched: agentMatched,
           };
         });
@@ -211,6 +212,10 @@ export default function DeliveryNoteDetailPage() {
     if (!editHeader.noteNumber) { sileo.error({ title: "Introduce el numero de albaran" }); return; }
     const validLines = editLines.filter((l) => l.product_id && l.quantity);
     if (validLines.length === 0) { sileo.error({ title: "Anade al menos una linea" }); return; }
+    if (isConfirmed && validLines.some((l) => !l.unit_price || Number(l.unit_price) <= 0)) {
+      sileo.error({ title: "Las lineas necesitan precio unitario para recalcular lotes y coste medio" });
+      return;
+    }
 
     setSavingEdit(true);
 
@@ -295,6 +300,10 @@ export default function DeliveryNoteDetailPage() {
   const handleConfirm = async () => {
     setConfirmDialogOpen(false);
     if (lines.length === 0) { sileo.error({ title: "Anade al menos una linea" }); return; }
+    if (lines.some((line) => line.unit_price == null || Number(line.unit_price) <= 0)) {
+      sileo.error({ title: "Todas las lineas necesitan precio unitario para confirmar" });
+      return;
+    }
     setConfirming(true);
     const { error } = await dypai.api.post("confirm_delivery_note", { id });
     setConfirming(false);
@@ -394,6 +403,14 @@ export default function DeliveryNoteDetailPage() {
         )}
 
         {/* Form */}
+        <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+          <CardContent className="py-3 text-sm text-emerald-800 dark:text-emerald-300">
+            {isConfirmed
+              ? "Al guardar se recalcularán los movimientos del albarán, los lotes asociados y el coste medio."
+              : "Al confirmar este albarán se generarán lotes automáticos por línea."}
+          </CardContent>
+        </Card>
+
         <DeliveryNoteForm
           header={editHeader}
           onHeaderChange={setEditHeader}
@@ -495,7 +512,7 @@ export default function DeliveryNoteDetailPage() {
         onClose={() => setConfirmDialogOpen(false)}
         onConfirm={handleConfirm}
         title="Confirmar Albaran"
-        message={`Se generaran ${lines.length} movimientos de entrada en ${note.warehouse_name} y se actualizaran los precios de compra.`}
+        message={`Se generaran ${lines.length} movimientos de entrada en ${note.warehouse_name}, con lotes automaticos y actualizacion del coste medio.`}
       />
     </div>
   );

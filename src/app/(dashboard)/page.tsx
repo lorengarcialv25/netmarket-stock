@@ -2,36 +2,23 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
+import { useWarehouseId } from "@/hooks/useWarehouse";
+import { useAuth } from "@/hooks/useAuth";
 import { PageLoader } from "@/components/ui/Spinner";
 import { DashboardStats } from "./_components/DashboardStats";
 import { LowStockAlert } from "./_components/LowStockAlert";
-import { RecentMovements } from "./_components/RecentMovements";
-import { StockByWarehouse } from "./_components/StockByWarehouse";
+import { MyTasksWidget } from "./_components/MyTasksWidget";
 import { ArrowRight, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Task } from "@/lib/types";
 
 interface DashboardStatsData {
   total_products: number;
   total_warehouses: number;
   total_stock_value: number;
   low_stock_count: number;
-}
-
-interface StockByWarehouseData {
-  warehouse_name: string;
-  total_items: number;
-  total_value: number;
-}
-
-interface RecentMovement {
-  id?: string;
-  product_name: string;
-  product_sku: string;
-  warehouse_name: string;
-  movement_type: string;
-  quantity: number;
-  created_at: string;
 }
 
 interface LowStockItem {
@@ -49,26 +36,30 @@ function num(v: unknown): number {
 }
 
 export default function DashboardPage() {
+  const warehouseId = useWarehouseId();
+  const { user } = useAuth();
+  const router = useRouter();
+
+  // Workers go straight to tasks
+  useEffect(() => {
+    if (user?.role === "worker") router.replace("/tareas");
+  }, [user, router]);
+
   const [stats, setStats] = useState<DashboardStatsData | null>(null);
-  const [stockByWarehouse, setStockByWarehouse] = useState<
-    StockByWarehouseData[]
-  >([]);
-  const [recentMovements, setRecentMovements] = useState<RecentMovement[]>(
-    []
-  );
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+  const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchDashboardData() {
       setLoading(true);
       try {
-        const [statsRes, warehouseRes, movementsRes, lowStockRes] =
+        const wh = warehouseId ? { warehouse_id: warehouseId } : {};
+        const [statsRes, lowStockRes, myTasksRes] =
           await Promise.all([
-            dypai.api.get("dashboard_stats"),
-            dypai.api.get("dashboard_stock_by_warehouse"),
-            dypai.api.get("dashboard_recent_movements"),
-            dypai.api.get("dashboard_low_stock"),
+            dypai.api.get("dashboard_stats", { params: wh }),
+            dypai.api.get("dashboard_low_stock", { params: wh }),
+            dypai.api.get("dashboard_my_tasks", {}),
           ]);
 
         if (statsRes.data && Array.isArray(statsRes.data) && statsRes.data[0]) {
@@ -79,28 +70,6 @@ export default function DashboardPage() {
             total_stock_value: num(r.total_stock_value),
             low_stock_count: num(r.low_stock_count),
           });
-        }
-        if (warehouseRes.data && Array.isArray(warehouseRes.data)) {
-          setStockByWarehouse(
-            warehouseRes.data.map((row: Record<string, unknown>) => ({
-              warehouse_name: String(row.warehouse_name ?? ""),
-              total_items: num(row.total_items),
-              total_value: num(row.total_value),
-            }))
-          );
-        }
-        if (movementsRes.data && Array.isArray(movementsRes.data)) {
-          setRecentMovements(
-            movementsRes.data.map((row: Record<string, unknown>) => ({
-              id: row.id != null ? String(row.id) : undefined,
-              product_name: String(row.product_name ?? ""),
-              product_sku: String(row.product_sku ?? ""),
-              warehouse_name: String(row.warehouse_name ?? ""),
-              movement_type: String(row.movement_type ?? ""),
-              quantity: num(row.quantity),
-              created_at: String(row.created_at ?? ""),
-            }))
-          );
         }
         if (lowStockRes.data && Array.isArray(lowStockRes.data)) {
           setLowStock(
@@ -113,6 +82,9 @@ export default function DashboardPage() {
             }))
           );
         }
+        if (myTasksRes.data && Array.isArray(myTasksRes.data)) {
+          setMyTasks(myTasksRes.data as Task[]);
+        }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -121,7 +93,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData();
-  }, []);
+  }, [warehouseId]);
 
   if (loading) {
     return <PageLoader label="Cargando panel de control..." />;
@@ -148,14 +120,12 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      <DashboardStats stats={stats} />
+      <DashboardStats stats={stats} showFinancials={user?.role !== "worker"} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-        <RecentMovements movements={recentMovements} />
+        <MyTasksWidget tasks={myTasks} />
         <LowStockAlert items={lowStock} />
       </div>
-
-      <StockByWarehouse warehouses={stockByWarehouse} />
     </div>
   );
 }

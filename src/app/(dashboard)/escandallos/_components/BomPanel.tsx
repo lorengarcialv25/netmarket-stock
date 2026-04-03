@@ -34,6 +34,7 @@ interface RawMaterial {
   id: string;
   name: string;
   sku: string;
+  unit_of_measure: string;
 }
 
 interface BomPanelProps {
@@ -48,8 +49,8 @@ interface BomPanelProps {
   showAddForm: boolean;
   setShowAddForm: (show: boolean) => void;
   availableRawMaterials: RawMaterial[];
-  addForm: { raw_material_id: string; quantity: string };
-  setAddForm: (form: { raw_material_id: string; quantity: string }) => void;
+  addForm: { raw_material_id: string; quantity: string; quantity_unit: string };
+  setAddForm: (form: { raw_material_id: string; quantity: string; quantity_unit: string }) => void;
   addSubmitting: boolean;
 }
 
@@ -209,7 +210,7 @@ export function BomPanel({
                   open={showAddForm}
                   onClose={() => {
                     setShowAddForm(false);
-                    setAddForm({ raw_material_id: "", quantity: "" });
+                    setAddForm({ raw_material_id: "", quantity: "", quantity_unit: "" });
                   }}
                   availableRawMaterials={availableRawMaterials}
                   form={addForm}

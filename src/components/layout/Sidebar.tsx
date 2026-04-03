@@ -14,55 +14,64 @@ import {
   PackageSearch,
   FileText,
   Users,
+  CheckSquare,
+  AlertCircle,
+  Link2,
   X,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 
-const roleLabels: Record<string, string> = {
-  admin: "Admin",
-  warehouse_manager: "Gestor",
-  worker: "Operario",
-  viewer: "Visualizador",
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+  roles?: string[]; // if set, only these roles see this item
 };
 
-const navSections = [
+type NavSection = {
+  label: string;
+  items: NavItem[];
+};
+
+// Roles that can see management/catalog pages
+const MGMT = ["admin", "colaborador", "warehouse_manager"];
+const ADMIN_ONLY = ["admin"];
+
+const navSections: NavSection[] = [
   {
     label: "General",
     items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/metricas", label: "Métricas", icon: BarChart3 },
+      { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: MGMT },
+      { href: "/tareas", label: "Tareas", icon: CheckSquare },
     ],
   },
   {
-    label: "Inventario",
+    label: "Flujo de trabajo",
     items: [
-      { href: "/productos", label: "Productos", icon: Package },
-      { href: "/categorias", label: "Categorias", icon: Tags },
-      { href: "/escandallos", label: "Escandallos", icon: ClipboardList },
-    ],
-  },
-  {
-    label: "Almacenamiento",
-    items: [
-      { href: "/almacenes", label: "Almacenes", icon: Warehouse },
-      { href: "/stock", label: "Stock", icon: PackageSearch },
-      { href: "/movimientos", label: "Movimientos", icon: ArrowRightLeft },
+      { href: "/escandallos", label: "Escandallos", icon: ClipboardList, roles: MGMT },
       { href: "/albaranes", label: "Albaranes", icon: FileText },
+      { href: "/stock", label: "Inventario", icon: PackageSearch },
+      { href: "/movimientos", label: "Movimientos", icon: ArrowRightLeft },
+      { href: "/incidencias", label: "Incidencias", icon: AlertCircle },
     ],
   },
   {
-    label: "Proveedores",
+    label: "Catalogo",
     items: [
-      { href: "/proveedores", label: "Proveedores", icon: Truck },
+      { href: "/productos", label: "Productos", icon: Package, roles: MGMT },
+      { href: "/proveedores", label: "Proveedores", icon: Truck, roles: MGMT },
+      { href: "/referencias", label: "Refs. Proveedor", icon: Link2, roles: MGMT },
     ],
   },
   {
-    label: "Administración",
-    adminOnly: true,
+    label: "Administracion",
     items: [
-      { href: "/usuarios", label: "Usuarios", icon: Users },
+      { href: "/metricas", label: "Metricas", icon: BarChart3, roles: MGMT },
+      { href: "/categorias", label: "Categorias", icon: Tags, roles: ADMIN_ONLY },
+      { href: "/almacenes", label: "Almacenes", icon: Warehouse, roles: ADMIN_ONLY },
+      { href: "/usuarios", label: "Usuarios", icon: Users, roles: ADMIN_ONLY },
     ],
   },
 ];
@@ -76,7 +85,12 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen, onMobileClose, collapsed }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const roleName = roleLabels[user?.role || ""] || user?.role || "authenticated";
+  const visibleSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.roles || item.roles.includes(user?.role || "")),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <>
@@ -122,7 +136,7 @@ export function Sidebar({ mobileOpen, onMobileClose, collapsed }: SidebarProps) 
           "flex-1 pt-2 pb-4 overflow-y-auto",
           collapsed ? "lg:px-2 px-3 lg:space-y-2 space-y-6" : "px-3 space-y-6"
         )}>
-          {navSections.filter((s) => !s.adminOnly || user?.role === "admin").map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.label}>
               {!collapsed && (
                 <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 hidden lg:block">
@@ -180,34 +194,6 @@ export function Sidebar({ mobileOpen, onMobileClose, collapsed }: SidebarProps) 
           ))}
         </nav>
 
-        {/* Footer - User info */}
-        <div className={cn(
-          "py-3 border-t border-sidebar-border shrink-0",
-          collapsed ? "lg:px-2 lg:text-center px-4" : "px-4"
-        )}>
-          <div className={cn(
-            "flex items-center gap-2.5",
-            collapsed ? "lg:justify-center" : ""
-          )}>
-            {/* Avatar */}
-            <div className="size-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-              <span className="text-[11px] font-semibold text-primary">
-                {user?.full_name
-                  ? user.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-                  : user?.email?.[0]?.toUpperCase() || "U"}
-              </span>
-            </div>
-            {/* Name + role */}
-            <div className={cn("flex-1 min-w-0", collapsed ? "lg:hidden" : "")}>
-              <p className="text-[13px] font-medium text-sidebar-foreground truncate">
-                {user?.full_name || user?.email?.split("@")[0] || "Usuario"}
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
-                {roleName}
-              </p>
-            </div>
-          </div>
-        </div>
       </aside>
     </>
   );

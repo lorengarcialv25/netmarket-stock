@@ -33,10 +33,12 @@ export interface ProductFormData {
   purchase_price: string;
   sale_price: string;
   min_stock: string;
-  weight: string;
+  weight_display: string;
   weight_unit: string;
-  units_per_box: string;
-  kg_per_box: string;
+  units_per_box_blister: string;
+  kg_per_box_blister: string;
+  units_per_box_60cm: string;
+  kg_per_box_60cm: string;
   image_url: string;
 }
 
@@ -253,10 +255,9 @@ export function ProductForm({
             <div className="grid grid-cols-2 gap-4">
               <FormInput
                 label="Peso"
-                type="number"
-                value={form.weight}
-                onChange={(e) => setForm({ ...form, weight: e.target.value })}
-                placeholder="0.00"
+                value={form.weight_display}
+                onChange={(e) => setForm({ ...form, weight_display: e.target.value })}
+                placeholder="Ej. 45-50"
               />
               <FormSelect
                 label="Unidad de Peso"
@@ -273,17 +274,31 @@ export function ProductForm({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <FormInput
-                label="Unidades por Caja"
-                type="number"
-                value={form.units_per_box}
-                onChange={(e) => setForm({ ...form, units_per_box: e.target.value })}
-                placeholder="0"
+                label="Unidades/caja blister"
+                value={form.units_per_box_blister}
+                onChange={(e) => setForm({ ...form, units_per_box_blister: e.target.value })}
+                placeholder="Ej. 120-128"
               />
               <FormInput
-                label="Kg por Caja"
+                label="Kg/caja blister"
                 type="number"
-                value={form.kg_per_box}
-                onChange={(e) => setForm({ ...form, kg_per_box: e.target.value })}
+                value={form.kg_per_box_blister}
+                onChange={(e) => setForm({ ...form, kg_per_box_blister: e.target.value })}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput
+                label="Unidades/caja 60cm"
+                value={form.units_per_box_60cm}
+                onChange={(e) => setForm({ ...form, units_per_box_60cm: e.target.value })}
+                placeholder="Ej. 128"
+              />
+              <FormInput
+                label="Kg/caja 60cm"
+                type="number"
+                value={form.kg_per_box_60cm}
+                onChange={(e) => setForm({ ...form, kg_per_box_60cm: e.target.value })}
                 placeholder="0.00"
               />
             </div>

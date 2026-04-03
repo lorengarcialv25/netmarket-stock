@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Spinner } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,12 +26,14 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   /** Client-side pagination page size (ignored if serverPagination is provided) */
   pageSize?: number;
+  pageSizeOptions?: number[];
   /** Server-side pagination config */
   serverPagination?: {
     page: number;
     pageSize: number;
     totalItems: number;
     onPageChange: (page: number) => void;
+    onPageSizeChange?: (pageSize: number) => void;
   };
 }
 
@@ -40,15 +42,19 @@ function PaginationBar({
   totalPages,
   totalItems,
   pageSize,
+  pageSizeOptions,
+  onPageSizeChange,
   onPageChange,
 }: {
   currentPage: number;
   totalPages: number;
   totalItems: number;
   pageSize: number;
+  pageSizeOptions: number[];
+  onPageSizeChange?: (pageSize: number) => void;
   onPageChange: (page: number) => void;
 }) {
-  const start = currentPage * pageSize + 1;
+  const start = totalItems === 0 ? 0 : currentPage * pageSize + 1;
   const end = Math.min((currentPage + 1) * pageSize, totalItems);
 
   // Show max 5 page buttons with ellipsis logic
@@ -66,9 +72,27 @@ function PaginationBar({
 
   return (
     <div className="flex items-center justify-between border-t border-border px-4 py-3">
-      <span className="text-sm text-muted-foreground">
-        {start}–{end} de {totalItems}
-      </span>
+      <div className="flex items-center gap-3">
+        {onPageSizeChange && pageSizeOptions.length > 0 && (
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            Filas por pagina
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none"
+            >
+              {pageSizeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <span className="text-sm text-muted-foreground">
+          {start}-{end} de {totalItems}
+        </span>
+      </div>
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
@@ -112,35 +136,45 @@ export function DataTable<T = any>({
   data,
   loading = false,
   emptyMessage = "No hay datos disponibles",
-  pageSize = 15,
+  pageSize = 50,
+  pageSizeOptions = [15, 25, 50, 100],
   serverPagination,
 }: DataTableProps<T>) {
   // Client-side pagination state
   const [clientPage, setClientPage] = useState(0);
-
-  // Reset client page when data changes
-  const dataLength = data.length;
-  const [prevLength, setPrevLength] = useState(dataLength);
-  if (dataLength !== prevLength) {
-    setPrevLength(dataLength);
-    if (clientPage >= Math.ceil(dataLength / pageSize)) {
-      setClientPage(0);
-    }
-  }
+  const [clientPageSize, setClientPageSize] = useState(pageSize);
 
   const isServerMode = !!serverPagination;
 
+  useEffect(() => {
+    setClientPageSize(pageSize);
+  }, [pageSize]);
+
+  useEffect(() => {
+    if (isServerMode) return;
+    const totalClientPages = Math.max(1, Math.ceil(data.length / clientPageSize));
+    if (clientPage > totalClientPages - 1) {
+      setClientPage(0);
+    }
+  }, [clientPage, clientPageSize, data.length, isServerMode]);
+
   const displayData = useMemo(() => {
     if (isServerMode) return data;
-    const start = clientPage * pageSize;
-    return data.slice(start, start + pageSize);
-  }, [data, clientPage, pageSize, isServerMode]);
+    const start = clientPage * clientPageSize;
+    return data.slice(start, start + clientPageSize);
+  }, [data, clientPage, clientPageSize, isServerMode]);
 
   const totalItems = isServerMode ? serverPagination.totalItems : data.length;
-  const currentPageSize = isServerMode ? serverPagination.pageSize : pageSize;
+  const currentPageSize = isServerMode ? serverPagination.pageSize : clientPageSize;
   const totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
   const currentPage = isServerMode ? serverPagination.page - 1 : clientPage;
   const showPagination = totalItems > currentPageSize;
+  const handlePageSizeChange = isServerMode
+    ? serverPagination.onPageSizeChange
+    : (nextPageSize: number) => {
+        setClientPageSize(nextPageSize);
+        setClientPage(0);
+      };
 
   if (loading) {
     return (
@@ -189,6 +223,8 @@ export function DataTable<T = any>({
           totalPages={totalPages}
           totalItems={totalItems}
           pageSize={currentPageSize}
+          pageSizeOptions={pageSizeOptions}
+          onPageSizeChange={handlePageSizeChange}
           onPageChange={(p) => {
             if (isServerMode) {
               serverPagination.onPageChange(p + 1);

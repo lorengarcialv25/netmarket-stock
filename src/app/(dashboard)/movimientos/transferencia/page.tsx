@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { useAuth } from "@/hooks/useAuth";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { sileo } from "sileo";
 import {
   ArrowLeft, Plus, Trash2, Save, Loader2, ArrowRightLeft, Warehouse,StickyNote,
@@ -23,7 +24,7 @@ export default function TransferenciaPage() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [originId, setOriginId] = useState("");
+  const originId = useWarehouseId() || "";
   const [destinationId, setDestinationId] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
@@ -119,9 +120,14 @@ export default function TransferenciaPage() {
         </CardHeader>
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <SearchableSelect label="Almacen de origen" value={originId} onChange={(v) => { setOriginId(v); if (v === destinationId) setDestinationId(""); }} placeholder="Seleccionar..." searchPlaceholder="Buscar almacen..." options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
             <SearchableSelect label="Almacen de destino" value={destinationId} onChange={setDestinationId} placeholder="Seleccionar..." searchPlaceholder="Buscar almacen..." options={destOptions} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+        <CardContent className="py-3 text-sm text-blue-800 dark:text-blue-300">
+          La transferencia moverá automáticamente los lotes disponibles por FIFO y conservará su trazabilidad en el almacén destino.
         </CardContent>
       </Card>
 

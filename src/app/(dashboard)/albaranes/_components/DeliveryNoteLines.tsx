@@ -16,6 +16,7 @@ interface NoteLine {
   product_id: string;
   quantity: number;
   unit_price: number | null;
+  expiry_date?: string | null;
   product_name: string;
   sku: string;
   unit_of_measure: string;
@@ -38,12 +39,12 @@ interface Props {
 
 export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesChanged }: Props) {
   // Add line
-  const [newLine, setNewLine] = useState({ product_id: "", quantity: "", unit_price: "" });
+  const [newLine, setNewLine] = useState({ product_id: "", quantity: "", unit_price: "", expiry_date: "" });
   const [addingLine, setAddingLine] = useState(false);
 
   // Edit line
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [lineForm, setLineForm] = useState({ product_id: "", quantity: "", unit_price: "" });
+  const [lineForm, setLineForm] = useState({ product_id: "", quantity: "", unit_price: "", expiry_date: "" });
   const [savingLine, setSavingLine] = useState(false);
 
   // Delete
@@ -67,10 +68,11 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
       product_id: newLine.product_id,
       quantity: Number(newLine.quantity),
       unit_price: newLine.unit_price ? Number(newLine.unit_price) : null,
+      expiry_date: newLine.expiry_date || "",
     });
     setAddingLine(false);
     if (error) { sileo.error({ title: "Error al anadir linea" }); return; }
-    setNewLine({ product_id: "", quantity: "", unit_price: "" });
+    setNewLine({ product_id: "", quantity: "", unit_price: "", expiry_date: "" });
     onLinesChanged();
   };
 
@@ -81,6 +83,7 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
       product_id: line.product_id,
       quantity: String(line.quantity),
       unit_price: line.unit_price != null ? String(line.unit_price) : "",
+      expiry_date: line.expiry_date || "",
     });
   };
 
@@ -97,6 +100,7 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
       product_id: lineForm.product_id,
       quantity: Number(lineForm.quantity),
       unit_price: lineForm.unit_price ? Number(lineForm.unit_price) : null,
+      expiry_date: lineForm.expiry_date || "",
     });
     setSavingLine(false);
     if (error) { sileo.error({ title: "Error al actualizar linea" }); return; }
@@ -139,7 +143,10 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
                 <FormInput label="Cantidad" type="number" value={newLine.quantity} onChange={(e) => setNewLine({ ...newLine, quantity: e.target.value })} placeholder="0" />
               </div>
               <div className="w-32">
-                <FormInput label="Precio Ud." type="number" value={newLine.unit_price} onChange={(e) => setNewLine({ ...newLine, unit_price: e.target.value })} placeholder="0.00" />
+                <FormInput label="Coste Ud." type="number" value={newLine.unit_price} onChange={(e) => setNewLine({ ...newLine, unit_price: e.target.value })} placeholder="0.00" />
+              </div>
+              <div className="w-36">
+                <FormInput label="Caducidad" type="date" value={newLine.expiry_date} onChange={(e) => setNewLine({ ...newLine, expiry_date: e.target.value })} />
               </div>
               <Button onClick={handleAddLine} disabled={addingLine || !newLine.product_id || !newLine.quantity} className="gap-2">
                 <Plus size={16} />
@@ -176,9 +183,10 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
                     <th className="text-[10px] font-black uppercase text-muted-foreground py-3 px-6 text-left w-[35%]">Producto</th>
                     <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-left w-[12%]">SKU</th>
                     <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-center w-[13%]">Cantidad</th>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[15%]">Precio Ud.</th>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right pr-6 w-[15%]">Total</th>
-                    {canEdit && <th className="py-3 w-[10%]" />}
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[15%]">Coste Ud.</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[12%]">Total</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-center w-[12%]">Caducidad</th>
+                    {canEdit && <th className="py-3 w-[8%]" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -209,10 +217,13 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
                           <td className="py-3 px-2 align-middle">
                             <input type="number" step="0.01" value={lineForm.unit_price} onChange={(e) => setLineForm({ ...lineForm, unit_price: e.target.value })} className="w-full text-right text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
                           </td>
-                          <td className="py-3 pr-6 text-right align-middle">
+                          <td className="py-3 pr-2 text-right align-middle">
                             <span className="text-sm font-bold text-muted-foreground">
                               {lineForm.quantity && lineForm.unit_price ? formatCurrency(Number(lineForm.quantity) * Number(lineForm.unit_price)) : "-"}
                             </span>
+                          </td>
+                          <td className="py-3 px-2 align-middle">
+                            <input type="date" value={lineForm.expiry_date} onChange={(e) => setLineForm({ ...lineForm, expiry_date: e.target.value })} className="w-full text-center text-xs bg-background border border-border rounded-md px-1.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary" />
                           </td>
                           <td className="py-3 align-middle">
                             <div className="flex items-center gap-1 justify-center">
@@ -251,8 +262,13 @@ export function DeliveryNoteLines({ noteId, lines, products, canEdit, onLinesCha
                         <td className="py-4 text-right text-sm text-muted-foreground align-middle">
                           {line.unit_price != null ? formatCurrency(Number(line.unit_price)) : "-"}
                         </td>
-                        <td className="py-4 text-right pr-6 font-black text-foreground text-sm align-middle">
+                        <td className="py-4 text-right pr-2 font-black text-foreground text-sm align-middle">
                           {line.unit_price != null ? formatCurrency(lineTotal) : "-"}
+                        </td>
+                        <td className="py-4 text-center text-xs text-muted-foreground align-middle">
+                          {line.expiry_date
+                            ? new Date(line.expiry_date).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
+                            : "—"}
                         </td>
                         {canEdit && (
                           <td className="py-4 text-center align-middle">

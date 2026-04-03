@@ -10,20 +10,22 @@ import type { WarehouseStock } from "@/lib/types";
 interface ProductStockSectionProps {
   stock: WarehouseStock[];
   loading: boolean;
-  purchasePrice: number;
+  averageCost: number;
   minStock: number;
 }
 
-export function ProductStockSection({ stock, loading, purchasePrice, minStock }: ProductStockSectionProps) {
+export function ProductStockSection({ stock, loading, averageCost, minStock }: ProductStockSectionProps) {
   const { totalQty, totalValue, lowStockCount } = useMemo(() => {
     let totalQty = 0;
     let lowStockCount = 0;
+    let totalValue = 0;
     for (const s of stock) {
       totalQty += s.quantity;
+      totalValue += s.quantity * Number(s.average_cost ?? averageCost ?? 0);
       if (s.quantity < minStock) lowStockCount++;
     }
-    return { totalQty, totalValue: totalQty * purchasePrice, lowStockCount };
-  }, [stock, purchasePrice, minStock]);
+    return { totalQty, totalValue, lowStockCount };
+  }, [stock, averageCost, minStock]);
 
   const columns = [
     { key: "warehouse_name", label: "Almacen" },
@@ -39,7 +41,7 @@ export function ProductStockSection({ stock, loading, purchasePrice, minStock }:
     {
       key: "value",
       label: "Valor",
-      render: (row: WarehouseStock) => formatCurrency(row.quantity * purchasePrice),
+      render: (row: WarehouseStock) => formatCurrency(row.quantity * Number(row.average_cost ?? averageCost ?? 0)),
     },
     {
       key: "status",

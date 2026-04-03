@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { sileo } from "sileo";
 import {
   ArrowLeft, ScanLine, Plus, Trash2, Save, Loader2,
@@ -21,7 +22,13 @@ interface ProductOption { id: string; name: string; sku: string; purchase_price:
 interface CatalogOption { id: string; name: string; }
 interface DraftLine {
   key: string; product_id: string; product_name: string; sku: string;
-  quantity: string; unit_price: string; matched: boolean;
+  quantity: string; unit_price: string; matched: boolean; expiry_date: string;
+}
+
+function buildLotPreview(sku: string) {
+  if (!sku) return "Se generará automáticamente al guardar";
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `${sku}-${date}-####`;
 }
 
 export default function EntradaStockPage() {
@@ -33,7 +40,7 @@ export default function EntradaStockPage() {
     if (user && !canCreateMovements(user.role)) router.replace("/movimientos");
   }, [user, router]);
 
-  const [warehouseId, setWarehouseId] = useState("");
+  const warehouseId = useWarehouseId() || "";
   const [supplierId, setSupplierId] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
@@ -62,7 +69,7 @@ export default function EntradaStockPage() {
 
   const productOptions = products.map((p) => ({ value: p.id, label: `${p.sku} - ${p.name}` }));
 
-  const addLine = () => setLines((prev) => [...prev, { key: crypto.randomUUID(), product_id: "", product_name: "", sku: "", quantity: "", unit_price: "", matched: true }]);
+  const addLine = () => setLines((prev) => [...prev, { key: crypto.randomUUID(), product_id: "", product_name: "", sku: "", quantity: "", unit_price: "", matched: true, expiry_date: "" }]);
 
   const updateLine = (key: string, field: string, value: string) => {
     setLines((prev) => prev.map((l) => {
@@ -105,7 +112,7 @@ export default function EntradaStockPage() {
         const newLines: DraftLine[] = parsed.lines.map((l: any) => {
           const matched = !!l.product_id;
           const prod = matched ? products.find((p) => p.id === l.product_id) : null;
-          return { key: crypto.randomUUID(), product_id: l.product_id || "", product_name: l.product_name_original || l.product_name || "", sku: l.product_sku || prod?.sku || "", quantity: String(l.quantity || ""), unit_price: l.unit_price != null ? String(l.unit_price) : (prod?.purchase_price ? String(prod.purchase_price) : ""), matched };
+          return { key: crypto.randomUUID(), product_id: l.product_id || "", product_name: l.product_name_original || l.product_name || "", sku: l.product_sku || prod?.sku || "", quantity: String(l.quantity || ""), unit_price: l.unit_price != null ? String(l.unit_price) : (prod?.purchase_price ? String(prod.purchase_price) : ""), matched, expiry_date: l.expiry_date || "" };
         });
         setLines((prev) => [...prev, ...newLines]);
         const m = newLines.filter((l) => l.matched).length;
@@ -118,12 +125,18 @@ export default function EntradaStockPage() {
     if (!warehouseId) { sileo.error({ title: "Selecciona un almacen" }); return; }
     const valid = lines.filter((l) => l.product_id && l.quantity);
     if (valid.length === 0) { sileo.error({ title: "Anade al menos una linea" }); return; }
+    if (valid.some((l) => !l.unit_price || Number(l.unit_price) <= 0)) {
+      sileo.error({ title: "Cada linea necesita un precio unitario mayor que 0" });
+      return;
+    }
     setSaving(true);
     let ok = 0, fail = 0;
     for (const line of valid) {
       const { error } = await dypai.api.post("create_stock_movement", {
         movement_type: "entry", warehouse_id: warehouseId, product_id: line.product_id,
         quantity: Number(line.quantity), reason: "purchase",
+        unit_cost: Number(line.unit_price),
+        expiry_date: line.expiry_date || undefined,
         notes: [supplierId ? `Proveedor: ${suppliers.find((s) => s.id === supplierId)?.name}` : "", notes].filter(Boolean).join(" | ") || undefined,
       });
       if (error) fail++; else ok++;
@@ -210,9 +223,14 @@ export default function EntradaStockPage() {
         </CardHeader>
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <SearchableSelect label="Almacen destino" value={warehouseId} onChange={setWarehouseId} placeholder="Seleccionar almacen..." searchPlaceholder="Buscar almacen..." options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
             <SearchableSelect label="Proveedor (opcional)" value={supplierId} onChange={setSupplierId} placeholder="Sin proveedor" searchPlaceholder="Buscar proveedor..." options={suppliers.map((s) => ({ value: s.id, label: s.name }))} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+        <CardContent className="py-3 text-sm text-emerald-800 dark:text-emerald-300">
+          Cada entrada generará un lote automáticamente en backend. El patrón será similar a <span className="font-mono">{buildLotPreview("SKU")}</span>.
         </CardContent>
       </Card>
 
@@ -259,11 +277,13 @@ export default function EntradaStockPage() {
               <table className="w-full">
                 <thead className="bg-muted/20">
                   <tr>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 px-6 text-left w-[38%]">Producto</th>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-left w-[12%]">SKU</th>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[14%]">Cantidad</th>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[14%]">Precio Ud.</th>
-                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right pr-6 w-[14%]">Total</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 px-6 text-left w-[32%]">Producto</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-left w-[10%]">SKU</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[12%]">Cantidad</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right w-[12%]">Precio Ud.</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-left w-[12%]">Lote</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-left w-[12%]">F. Caducidad</th>
+                    <th className="text-[10px] font-black uppercase text-muted-foreground py-3 text-right pr-6 w-[10%]">Total</th>
                     <th className="py-3 w-[8%]" />
                   </tr>
                 </thead>
@@ -291,6 +311,14 @@ export default function EntradaStockPage() {
                         <td className="py-3 px-2">
                           <input type="number" step="0.01" value={line.unit_price} onChange={(e) => updateLine(line.key, "unit_price", e.target.value)} placeholder="0.00" className="w-full text-right text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
                         </td>
+                        <td className="py-3 px-2">
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {buildLotPreview(line.sku)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2">
+                          <input type="date" value={line.expiry_date} onChange={(e) => updateLine(line.key, "expiry_date", e.target.value)} className="w-full text-sm bg-background border border-border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary font-mono" />
+                        </td>
                         <td className="py-3 pr-6 text-right font-mono text-sm font-bold">
                           {total > 0 ? formatCurrency(total) : <span className="text-muted-foreground font-normal">-</span>}
                         </td>
@@ -313,8 +341,13 @@ export default function EntradaStockPage() {
                       <span className="text-sm font-bold">{totalQty > 0 ? totalQty.toLocaleString() : ""}</span>
                       {totalQty > 0 && <span className="text-[10px] font-bold text-muted-foreground uppercase ml-1">uds</span>}
                     </td>
-                    <td className="py-4 text-right text-xs font-bold text-muted-foreground uppercase">Total</td>
-                    <td className="py-4 text-right pr-6 text-base font-black text-primary">{formatCurrency(totalValue)}</td>
+                    <td />
+                    <td />
+                    <td />
+                    <td className="py-4 text-right pr-6">
+                      <span className="block text-xs font-bold text-muted-foreground uppercase mb-0.5">Total</span>
+                      <span className="text-base font-black text-primary">{formatCurrency(totalValue)}</span>
+                    </td>
                     <td />
                   </tr>
                 </tfoot>

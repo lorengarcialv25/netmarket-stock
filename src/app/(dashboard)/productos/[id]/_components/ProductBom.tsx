@@ -39,7 +39,7 @@ export function ProductBom({ bomItems, loading, salePrice, exportMeta }: Product
       label: "Cantidad",
       render: (item: BillOfMaterial) => (
         <span className="font-semibold">
-          {formatNumber(item.quantity)} {item.raw_material_unit}
+          {formatNumber(item.display_quantity ?? item.quantity_display ?? item.quantity)} {item.display_unit ?? item.quantity_unit ?? item.raw_material_unit}
         </span>
       ),
     },

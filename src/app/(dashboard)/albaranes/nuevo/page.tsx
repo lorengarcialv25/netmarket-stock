@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useWarehouse } from "@/hooks/useWarehouse";
 import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
 import { sileo } from "sileo";
@@ -19,11 +20,22 @@ interface CatalogOption { id: string; name: string; }
 export default function NuevoAlbaranPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { selected } = useWarehouse();
+  const warehouseLocked = selected !== null && selected !== "all";
   const ocrInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user && !canManageInventory(user.role)) router.replace("/albaranes");
   }, [user, router]);
+
+  useEffect(() => {
+    if (selected === null) return;
+    if (selected === "all") {
+      setHeader((h) => ({ ...h, warehouseId: "" }));
+    } else {
+      setHeader((h) => ({ ...h, warehouseId: selected.id }));
+    }
+  }, [selected]);
 
   const [header, setHeader] = useState<HeaderFields>({
     noteNumber: "", noteDate: new Date().toISOString().split("T")[0], supplierId: "", warehouseId: "", notes: "",
@@ -105,6 +117,7 @@ export default function NuevoAlbaranPage() {
             quantity: String(l.quantity || ""),
             unit_price: l.unit_price != null ? String(l.unit_price) : (prod?.purchase_price ? String(prod.purchase_price) : ""),
             unit_of_measure: prod?.unit_of_measure || "",
+            expiry_date: l.expiry_date || "",
             matched: agentMatched,
           };
         });
@@ -130,6 +143,10 @@ export default function NuevoAlbaranPage() {
     if (!header.noteNumber) { sileo.error({ title: "Introduce el numero de albaran" }); return; }
     const validLines = lines.filter((l) => l.product_id && l.quantity);
     if (validLines.length === 0) { sileo.error({ title: "Anade al menos una linea" }); return; }
+    if (confirm && validLines.some((l) => !l.unit_price || Number(l.unit_price) <= 0)) {
+      sileo.error({ title: "Para confirmar el albaran todas las lineas necesitan precio unitario" });
+      return;
+    }
 
     setSaving(true);
 
@@ -152,6 +169,7 @@ export default function NuevoAlbaranPage() {
       await dypai.api.post("add_delivery_note_line", {
         delivery_note_id: noteId, product_id: line.product_id,
         quantity: Number(line.quantity), unit_price: line.unit_price ? Number(line.unit_price) : null,
+        expiry_date: line.expiry_date || "",
       });
     }
 
@@ -218,6 +236,12 @@ export default function NuevoAlbaranPage() {
       )}
 
       {/* Shared form */}
+      <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
+        <CardContent className="py-3 text-sm text-emerald-800 dark:text-emerald-300">
+          Al confirmar el albarán se generará un lote automático por cada línea de entrada y ese precio unitario alimentará el coste medio del producto.
+        </CardContent>
+      </Card>
+
       <DeliveryNoteForm
         header={header}
         onHeaderChange={setHeader}
@@ -228,6 +252,7 @@ export default function NuevoAlbaranPage() {
         products={products}
         onScanClick={() => ocrInputRef.current?.click()}
         scanDisabled={scanning}
+        lockWarehouse={warehouseLocked}
       />
 
       {/* Actions */}
@@ -250,7 +275,7 @@ export default function NuevoAlbaranPage() {
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => { setConfirmOpen(false); handleSave(true); }}
         title="Confirmar Albaran"
-        message={`Se creara el albaran con ${validCount} lineas y se actualizara el stock.`}
+        message={`Se creara el albaran con ${validCount} lineas, se generaran lotes automaticos y se actualizara el coste medio del stock.`}
       />
     </div>
   );

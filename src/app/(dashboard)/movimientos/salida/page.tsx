@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { dypai } from "@/lib/dypai";
+import { useWarehouseId } from "@/hooks/useWarehouse";
 import { sileo } from "sileo";
 import {
   ArrowLeft, ScanLine, Plus, Trash2, Save, Loader2,
@@ -35,7 +36,7 @@ export default function SalidaStockPage() {
     if (user && !canCreateMovements(user.role)) router.replace("/movimientos");
   }, [user, router]);
 
-  const [warehouseId, setWarehouseId] = useState("");
+  const warehouseId = useWarehouseId() || "";
   const [reason, setReason] = useState("sale");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
@@ -126,9 +127,6 @@ export default function SalidaStockPage() {
     setSaving(false);
     if (fail > 0) sileo.warning({ title: `${ok} salidas creadas, ${fail} fallaron` });
     else sileo.success({ title: `${ok} salidas de stock registradas` });
-    for (const line of valid) {
-      dypai.api.post("create_low_stock_alert", { product_id: line.product_id, warehouse_id: warehouseId }).catch(() => {});
-    }
     router.push("/movimientos");
   };
 
@@ -207,9 +205,14 @@ export default function SalidaStockPage() {
         </CardHeader>
         <CardContent className="pt-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <SearchableSelect label="Almacen de origen" value={warehouseId} onChange={setWarehouseId} placeholder="Seleccionar almacen..." searchPlaceholder="Buscar almacen..." options={warehouses.map((w) => ({ value: w.id, label: w.name }))} />
             <FormSelect label="Motivo de salida" value={reason} onChange={(e) => setReason(e.target.value)} options={EXIT_REASONS.map((r) => ({ value: r, label: movementReasonLabel(r) }))} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+        <CardContent className="py-3 text-sm text-blue-800 dark:text-blue-300">
+          No hace falta indicar lote manualmente. Al guardar, la salida se asignará automáticamente por FIFO usando los lotes disponibles.
         </CardContent>
       </Card>
 

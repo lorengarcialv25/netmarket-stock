@@ -2,30 +2,22 @@
 
 import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/badge";
-import { ArrowDown, ArrowUp, ArrowRightLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { StockMovement } from "@/lib/types";
+import { ArrowDown, ArrowUp, ArrowRightLeft, Eye, Pencil, Trash2 } from "lucide-react";
 import {
   formatDateTime,
   movementTypeLabel,
-  movementReasonLabel,
 } from "@/lib/utils";
 
-interface Movement {
-  id: string;
-  created_at: string;
-  product_name: string;
-  product_sku: string;
-  warehouse_name: string;
-  movement_type: "entry" | "exit" | "transfer";
-  quantity: number;
-  reason: string;
-  lot_number: string | null;
-  destination_warehouse_name: string | null;
-  notes: string | null;
-}
-
 interface MovementTableProps {
-  data: Movement[];
+  data: StockMovement[];
   loading: boolean;
+  onView: (movement: StockMovement) => void;
+  onEdit: (movement: StockMovement) => void;
+  onDelete: (movement: StockMovement) => void;
+  canEdit: (movement: StockMovement) => boolean;
+  canDelete: (movement: StockMovement) => boolean;
   serverPagination?: {
     page: number;
     pageSize: number;
@@ -55,15 +47,14 @@ const columns = [
   {
     key: "created_at",
     label: "Fecha",
-    render: (item: Movement) => formatDateTime(item.created_at),
+    render: (item: StockMovement) => formatDateTime(item.created_at),
   },
   { key: "product_name", label: "Producto" },
   { key: "product_sku", label: "SKU" },
-  { key: "warehouse_name", label: "Almacen" },
   {
     key: "movement_type",
     label: "Tipo",
-    render: (item: Movement) => {
+    render: (item: StockMovement) => {
       const badge = movementTypeBadge[item.movement_type];
       if (!badge) return movementTypeLabel(item.movement_type);
       const props = getBadgeProps(badge.variant);
@@ -77,7 +68,7 @@ const columns = [
   {
     key: "quantity",
     label: "Cantidad",
-    render: (item: Movement) => (
+    render: (item: StockMovement) => (
       <span
         className={`inline-flex items-center gap-1 font-semibold ${
           item.movement_type === "entry"
@@ -99,30 +90,64 @@ const columns = [
     ),
   },
   {
-    key: "reason",
-    label: "Motivo",
-    render: (item: Movement) => movementReasonLabel(item.reason),
-  },
-  { key: "lot_number", label: "Lote" },
-  {
-    key: "destination_warehouse_name",
-    label: "Destino",
-    render: (item: Movement) =>
-      item.movement_type === "transfer"
-        ? item.destination_warehouse_name || "-"
-        : "-",
+    key: "lot_number",
+    label: "Lote",
+    render: (item: StockMovement) => item.lot_allocations || item.lot_number || "-",
   },
   {
-    key: "notes",
-    label: "Notas",
-    render: (item: Movement) => (
-      <span className="max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap block">
-        {item.notes || "-"}
-      </span>
-    ),
+    key: "expiry_date",
+    label: "Caducidad",
+    render: (item: StockMovement) => {
+      if (!item.expiry_date) return "-";
+      const exp = new Date(item.expiry_date + "T00:00:00");
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const formatted = exp.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+      if (diffDays < 0) return <span className="text-destructive font-medium">{formatted}</span>;
+      if (diffDays <= 30) return <span className="text-amber-600 dark:text-amber-400 font-medium">{formatted}</span>;
+      return formatted;
+    },
   },
 ];
 
-export function MovementTable({ data, loading, serverPagination }: MovementTableProps) {
-  return <DataTable columns={columns} data={data} loading={loading} serverPagination={serverPagination} />;
+export function MovementTable({
+  data,
+  loading,
+  onView,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+  serverPagination,
+}: MovementTableProps) {
+  const actionColumns = [
+    ...columns,
+    {
+      key: "actions",
+      label: "Acciones",
+      render: (item: StockMovement) => (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => onView(item)} className="gap-1.5">
+            <Eye size={14} />
+            Ver detalle
+          </Button>
+          {canEdit(item) && (
+            <Button variant="ghost" size="sm" onClick={() => onEdit(item)} className="gap-1.5">
+              <Pencil size={14} />
+              Editar
+            </Button>
+          )}
+          {canDelete(item) && (
+            <Button variant="ghost" size="sm" onClick={() => onDelete(item)} className="gap-1.5 text-destructive hover:text-destructive">
+              <Trash2 size={14} />
+              Eliminar
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return <DataTable columns={actionColumns} data={data} loading={loading} serverPagination={serverPagination} />;
 }

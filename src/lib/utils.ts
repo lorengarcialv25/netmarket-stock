@@ -91,11 +91,16 @@ export function productTypeLabel(type: string): string {
 
 // ---- Role helpers ----
 
-export type AppRole = "admin" | "warehouse_manager" | "worker" | "viewer";
+export type AppRole = "admin" | "colaborador" | "warehouse_manager" | "worker";
 
-/** Can manage master data (products, suppliers, BOM) */
+/** Full admin access (manage catalog, admin settings, users) */
 export function isAdmin(role?: string): boolean {
   return role === "admin";
+}
+
+/** Can see everything like admin (admin + colaborador) */
+export function canViewAll(role?: string): boolean {
+  return role === "admin" || role === "colaborador";
 }
 
 /** Can manage warehouses, categories, delivery notes */
@@ -103,12 +108,13 @@ export function canManageInventory(role?: string): boolean {
   return role === "admin" || role === "warehouse_manager";
 }
 
-/** Can create stock movements (entry/exit/transfer) */
-export function canCreateMovements(role?: string): boolean {
-  return role === "admin" || role === "warehouse_manager" || role === "worker";
+/** Can do operational work (movements, tasks, incidents, albaranes) */
+export function canOperate(role?: string): boolean {
+  return role === "admin" || role === "colaborador" || role === "warehouse_manager" || role === "worker";
 }
 
-/** Is view-only user */
-export function isViewOnly(role?: string): boolean {
-  return role === "viewer" || (!role);
+/** Can create stock movements (entry/exit/transfer) */
+export function canCreateMovements(role?: string): boolean {
+  return role === "admin" || role === "colaborador" || role === "warehouse_manager" || role === "worker";
 }
+

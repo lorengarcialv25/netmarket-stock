@@ -10,6 +10,7 @@ import { Package, Download } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { getPackagingOptions } from "@/lib/masterBox";
 import { ProductTable } from "./_components/ProductTable";
 import { ProductFilters } from "./_components/ProductFilters";
 import { ProductForm, type ProductFormData } from "./_components/ProductForm";
@@ -26,7 +27,14 @@ interface SupplierOption {
   name: string;
 }
 
-const PAGE_SIZE = 15;
+const DEFAULT_PAGE_SIZE = 50;
+
+function parseLeadingNumber(value: string): number | null {
+  const match = value.match(/\d+(?:[.,]\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0].replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 const initialForm: ProductFormData = {
   sku: "",
@@ -39,10 +47,12 @@ const initialForm: ProductFormData = {
   purchase_price: "",
   sale_price: "",
   min_stock: "",
-  weight: "",
+  weight_display: "",
   weight_unit: "gramo",
-  units_per_box: "",
-  kg_per_box: "",
+  units_per_box_blister: "",
+  kg_per_box_blister: "",
+  units_per_box_60cm: "",
+  kg_per_box_60cm: "",
   image_url: "",
 };
 
@@ -54,6 +64,7 @@ export default function ProductosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +80,7 @@ export default function ProductosPage() {
 
   const fetchProducts = useCallback(async (p: number) => {
     setLoading(true);
-    const params: Record<string, unknown> = { page: p, page_size: PAGE_SIZE };
+    const params: Record<string, unknown> = { page: p, page_size: pageSize };
     if (debouncedSearch) params.search = debouncedSearch;
     if (filterType) params.product_type = filterType;
     if (filterCategory) params.category_id = filterCategory;
@@ -83,7 +94,7 @@ export default function ProductosPage() {
       setTotalItems(0);
     }
     setLoading(false);
-  }, [debouncedSearch, filterType, filterCategory]);
+  }, [debouncedSearch, filterType, filterCategory, pageSize]);
 
   const fetchCatalogs = useCallback(async () => {
     const [categoriesRes, suppliersRes] = await Promise.all([
@@ -105,7 +116,7 @@ export default function ProductosPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, filterType, filterCategory]);
+  }, [debouncedSearch, filterType, filterCategory, pageSize]);
 
   // Auto-open create modal from quick actions
   useEffect(() => {
@@ -142,24 +153,35 @@ export default function ProductosPage() {
       purchase_price: String(product.purchase_price),
       sale_price: String(product.sale_price),
       min_stock: String(product.min_stock),
-      weight: product.weight != null ? String(product.weight) : "",
+      weight_display: product.weight_display || (product.weight != null ? String(product.weight) : ""),
       weight_unit: product.weight_unit || "gramo",
-      units_per_box: product.units_per_box != null ? String(product.units_per_box) : "",
-      kg_per_box: product.kg_per_box != null ? String(product.kg_per_box) : "",
+      units_per_box_blister: product.units_per_box_blister || (product.units_per_box != null ? String(product.units_per_box) : ""),
+      kg_per_box_blister: product.kg_per_box_blister != null ? String(product.kg_per_box_blister) : (product.kg_per_box != null ? String(product.kg_per_box) : ""),
+      units_per_box_60cm: product.units_per_box_60cm || "",
+      kg_per_box_60cm: product.kg_per_box_60cm != null ? String(product.kg_per_box_60cm) : "",
       image_url: product.image_url || "",
     });
     setModalOpen(true);
   };
 
   const handleSubmit = async () => {
+    const legacyWeight = parseLeadingNumber(form.weight_display);
+    const legacyUnitsPerBox = parseLeadingNumber(form.units_per_box_blister);
+    const blisterKg = parseFloat(form.kg_per_box_blister) || null;
+    const box60Kg = parseFloat(form.kg_per_box_60cm) || null;
     const body = {
       ...form,
       purchase_price: parseFloat(form.purchase_price) || 0,
       sale_price: parseFloat(form.sale_price) || 0,
       min_stock: parseInt(form.min_stock) || 0,
-      weight: parseFloat(form.weight) || null,
-      units_per_box: parseInt(form.units_per_box) || null,
-      kg_per_box: parseFloat(form.kg_per_box) || null,
+      weight: legacyWeight,
+      units_per_box: legacyUnitsPerBox,
+      kg_per_box: blisterKg,
+      kg_per_box_blister: blisterKg,
+      kg_per_box_60cm: box60Kg,
+      weight_display: form.weight_display.trim(),
+      units_per_box_blister: form.units_per_box_blister.trim(),
+      units_per_box_60cm: form.units_per_box_60cm.trim(),
     };
 
     if (editingProduct) {
@@ -195,19 +217,25 @@ export default function ProductosPage() {
         return;
       }
       const rows = (data as Product[]).map((p) => {
-        const w = p.weight;
+        const packagingOptions = getPackagingOptions(p);
         const pesoMedida =
-          w != null && String(w) !== ""
-            ? `${w} ${p.weight_unit ?? ""}`.trim()
+          p.weight_display && String(p.weight_display).trim() !== ""
+            ? `${p.weight_display} ${p.weight_unit ?? ""}`.trim()
             : "—";
+        const blister = packagingOptions.find((option) => option.key === "blister");
+        const box60 = packagingOptions.find((option) => option.key === "60cm");
         return {
           ...p,
           peso_medida: pesoMedida,
+          blister_units: blister?.unitsLabel || "—",
+          blister_weight: blister?.weightLabel || "—",
+          box60_units: box60?.unitsLabel || "—",
+          box60_weight: box60?.weightLabel || "—",
         } as Record<string, unknown>;
       });
       exportToExcel(rows, [
-        { key: "sku", label: "SKU" },
-        { key: "name", label: "Nombre" },
+        { key: "sku", label: "FNSKU" },
+        { key: "name", label: "SKU" },
         {
           key: "description",
           label: "Descripción",
@@ -241,7 +269,11 @@ export default function ProductosPage() {
           label: "Activo",
           format: (v) => (v === true ? "Sí" : "No"),
         },
-        { key: "peso_medida", label: "Peso / unidad peso" },
+        { key: "peso_medida", label: "Peso" },
+        { key: "blister_units", label: "Unidades/caja blister" },
+        { key: "blister_weight", label: "Kg/caja blister" },
+        { key: "box60_units", label: "Unidades/caja 60cm" },
+        { key: "box60_weight", label: "Kg/caja 60cm" },
       ], "catalogo_productos", "Catálogo");
       sileo.success({ title: "Exportación completada" });
     } finally {
@@ -288,9 +320,13 @@ export default function ProductosPage() {
         onDelete={setConfirmDeleteId}
         serverPagination={{
           page,
-          pageSize: PAGE_SIZE,
+          pageSize,
           totalItems,
           onPageChange: setPage,
+          onPageSizeChange: (nextPageSize) => {
+            setPage(1);
+            setPageSize(nextPageSize);
+          },
         }}
       />
 
